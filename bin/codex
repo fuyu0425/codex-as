@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+canonical_path() {
+  local path="$1"
+  if command -v realpath >/dev/null 2>&1; then
+    realpath "$path"
+  elif readlink -f "$path" >/dev/null 2>&1; then
+    readlink -f "$path"
+  else
+    local dir base
+    dir="$(cd "$(dirname "$path")" && pwd -P)"
+    base="$(basename "$path")"
+    printf '%s/%s\n' "$dir" "$base"
+  fi
+}
+
+self="$(canonical_path "$0")"
+
+real_codex="$(
+  type -a -P codex \
+    | while read -r path; do
+        if [[ "$(canonical_path "$path")" != "$self" ]]; then
+          printf '%s\n' "$path"
+          break
+        fi
+      done
+)"
+
+if [[ -z "${real_codex:-}" ]]; then
+  echo "error: original codex not found after wrapper in PATH" >&2
+  exit 127
+fi
+
+if ! codex-as current >/dev/null 2>&1; then
+  exec "$real_codex" "$@"
+fi
+
+exec codex-as run --codex-bin "$real_codex" -- "$@"

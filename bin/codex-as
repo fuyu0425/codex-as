@@ -1,0 +1,761 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat >&2 <<'EOF'
+usage:
+  codex-as oauth [--debug-auth] [codex args...]
+  codex-as api [--debug-auth] [codex args...]
+  codex-as api-key [--debug-auth] [codex args...]
+  codex-as save NAME [--provider PROVIDER]
+  codex-as switch NAME
+  codex-as current
+  codex-as list
+  codex-as run [--codex-bin PATH] [--debug-auth] [-- codex args...]
+  codex-as completions [install|uninstall]
+  codex-as install-completions
+
+profiles:
+  oauth      use ~/.codex/auth-oauth.json and model_provider="openai"
+  api        use ~/.codex/auth-api-key.json and model_provider="custom"
+  api-key    alias for api
+
+storage:
+  CODEX_AS_HOME, default: ${XDG_CONFIG_HOME:-~/.config}/codex-as
+
+env overrides:
+  CODEX_AS_OAUTH_AUTH
+  CODEX_AS_API_AUTH
+  CODEX_AS_OAUTH_PROVIDER
+  CODEX_AS_API_PROVIDER
+  CODEX_AS_REAL_CODEX
+
+debug:
+  --debug-auth    enter the bwrap view, print ~/.codex/auth.json details, then exit
+
+macOS:
+  Bubblewrap is Linux-only. On Darwin, codex-as falls back to a locked temporary
+  ~/.codex/auth.json swap during Codex startup.
+EOF
+  exit 2
+}
+
+script_dir() {
+  local source dir
+  source="${BASH_SOURCE[0]}"
+  while [[ -L "$source" ]]; do
+    dir="$(cd "$(dirname "$source")" && pwd -P)"
+    source="$(readlink "$source")"
+    [[ "$source" != /* ]] && source="$dir/$source"
+  done
+  cd "$(dirname "$source")" && pwd -P
+}
+
+codex_as_home() {
+  printf '%s\n' "${CODEX_AS_HOME:-${XDG_CONFIG_HOME:-$HOME/.config}/codex-as}"
+}
+
+profile_dir() {
+  printf '%s/profiles/%s\n' "$(codex_as_home)" "$1"
+}
+
+validate_name() {
+  local name="$1"
+  if [[ ! "$name" =~ ^[A-Za-z0-9._-]+$ ]]; then
+    echo "error: invalid profile name: $name" >&2
+    echo "profile names may contain only letters, numbers, dot, underscore, and dash" >&2
+    exit 2
+  fi
+}
+
+known_commands() {
+  printf '%s\n' oauth api api-key save switch current list run completions install-completions
+}
+
+is_adjacent_transposition() {
+  local input="$1"
+  local candidate="$2"
+  local i swapped
+
+  [[ "${#input}" == "${#candidate}" ]] || return 1
+
+  for ((i = 0; i < ${#input} - 1; i++)); do
+    swapped="${input:0:i}${input:i+1:1}${input:i:1}${input:i+2}"
+    [[ "$swapped" == "$candidate" ]] && return 0
+  done
+
+  return 1
+}
+
+edit_distance() {
+  local input="$1"
+  local candidate="$2"
+  awk -v a="$input" -v b="$candidate" '
+    function min3(x, y, z) {
+      return x < y ? (x < z ? x : z) : (y < z ? y : z)
+    }
+    BEGIN {
+      la = length(a)
+      lb = length(b)
+      for (i = 0; i <= la; i++) d[i, 0] = i
+      for (j = 0; j <= lb; j++) d[0, j] = j
+      for (i = 1; i <= la; i++) {
+        ca = substr(a, i, 1)
+        for (j = 1; j <= lb; j++) {
+          cb = substr(b, j, 1)
+          cost = ca == cb ? 0 : 1
+          d[i, j] = min3(d[i - 1, j] + 1, d[i, j - 1] + 1, d[i - 1, j - 1] + cost)
+        }
+      }
+      print d[la, lb]
+    }
+  '
+}
+
+suggest_command() {
+  local input="$1"
+  local candidate distance best="" best_distance=99
+
+  while IFS= read -r candidate; do
+    if is_adjacent_transposition "$input" "$candidate"; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+
+    distance="$(edit_distance "$input" "$candidate")"
+    if (( distance < best_distance )); then
+      best="$candidate"
+      best_distance="$distance"
+    fi
+  done < <(known_commands)
+
+  if (( best_distance <= 2 )); then
+    printf '%s\n' "$best"
+  fi
+}
+
+unknown_command() {
+  local command_name="$1"
+  local suggestion
+  echo "error: unknown command: $command_name" >&2
+  suggestion="$(suggest_command "$command_name")"
+  if [[ -n "$suggestion" ]]; then
+    echo "did you mean: $suggestion" >&2
+  fi
+  usage
+}
+
+toml_string() {
+  local value="$1"
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  printf '"%s"' "$value"
+}
+
+extract_model_provider() {
+  local config="$1"
+  sed -nE "s/^[[:space:]]*model_provider[[:space:]]*=[[:space:]]*['\"]([^'\"]*)['\"].*/\\1/p" "$config" | sed -n '1p'
+}
+
+provider_name_for_profile() {
+  local name="$1"
+  printf 'codex-as-%s\n' "$(printf '%s' "$name" | sed -E 's/[^A-Za-z0-9_-]+/-/g')"
+}
+
+extract_provider_config() {
+  local config="$1"
+  local provider="$2"
+  local saved_provider="$3"
+
+  awk -v provider="$provider" -v saved_provider="$saved_provider" '
+    $0 == "[model_providers." provider "]" {
+      in_provider = 1
+      next
+    }
+    /^\[/ {
+      if (in_provider) exit
+    }
+    in_provider && /^[[:space:]]*[A-Za-z0-9_-]+[[:space:]]*=/ {
+      line = $0
+      sub(/^[[:space:]]*/, "", line)
+      if (line ~ /^name[[:space:]]*=/) {
+        print "name = \"" saved_provider "\""
+      } else {
+        print line
+      }
+    }
+  ' "$config"
+}
+
+canonical_path() {
+  local path="$1"
+  if command -v realpath >/dev/null 2>&1; then
+    realpath "$path"
+  elif readlink -f "$path" >/dev/null 2>&1; then
+    readlink -f "$path"
+  else
+    local dir base
+    dir="$(cd "$(dirname "$path")" && pwd -P)"
+    base="$(basename "$path")"
+    printf '%s/%s\n' "$dir" "$base"
+  fi
+}
+
+is_codex_as_shim() {
+  local path="$1"
+  grep -F 'codex-as run --codex-bin' "$path" >/dev/null 2>&1
+}
+
+resolve_codex_binary() {
+  if [[ -n "${CODEX_AS_REAL_CODEX:-}" ]]; then
+    printf '%s\n' "$CODEX_AS_REAL_CODEX"
+    return
+  fi
+
+  local self candidate
+  self="$(canonical_path "$0")"
+
+  while IFS= read -r candidate; do
+    [[ -n "$candidate" ]] || continue
+    if [[ "$(canonical_path "$candidate")" == "$self" ]]; then
+      continue
+    fi
+    if is_codex_as_shim "$candidate"; then
+      continue
+    fi
+    printf '%s\n' "$candidate"
+    return
+  done < <(type -a -P codex 2>/dev/null || true)
+
+  echo "error: codex not found in PATH." >&2
+  exit 127
+}
+
+warn_if_world_readable() {
+  local path="$1"
+  local mode
+
+  if mode="$(stat -c '%a' "$path" 2>/dev/null)"; then
+    case "$mode" in
+      *[4567])
+        echo "warning: auth file is world-readable: $path" >&2
+        ;;
+    esac
+  elif [[ "$(ls -ld "$path")" == ???????r* ]]; then
+    echo "warning: auth file is world-readable: $path" >&2
+  fi
+}
+
+has_bwrap() {
+  command -v bwrap >/dev/null 2>&1
+}
+
+check_bwrap() {
+  if ! command -v bwrap >/dev/null 2>&1; then
+    echo "error: bwrap not found. Install bubblewrap first." >&2
+    exit 127
+  fi
+}
+
+run_codex_with_bwrap() {
+  local auth_file="$1"
+  local model_provider="$2"
+  local codex_bin="$3"
+  local debug_auth="$4"
+  local provider_file="$5"
+  shift 5
+
+  local target="$HOME/.codex/auth.json"
+
+  check_bwrap
+
+  if (( ! debug_auth )) && [[ ! -x "$codex_bin" ]]; then
+    echo "error: codex not found or not executable: $codex_bin" >&2
+    exit 127
+  fi
+
+  if [[ ! -f "$auth_file" ]]; then
+    echo "error: auth file does not exist: $auth_file" >&2
+    exit 1
+  fi
+
+  warn_if_world_readable "$auth_file"
+
+  mkdir -p "$HOME/.codex"
+
+  # Bubblewrap file bind mounts need the destination path to exist. This creates
+  # only an empty placeholder when missing; it never overwrites an existing file.
+  if [[ ! -e "$target" ]]; then
+    : >"$target"
+    chmod 600 "$target"
+  fi
+
+  local bwrap_args=(
+    --bind / /
+    --dev-bind /dev /dev
+    --proc /proc
+    --tmpfs /tmp
+    --bind "$auth_file" "$target"
+    --setenv HOME "$HOME"
+    --setenv USER "${USER:-$(id -un)}"
+    --setenv PATH "$PATH"
+    --chdir "$PWD"
+  )
+
+  if (( debug_auth )); then
+    # shellcheck disable=SC2016
+    exec bwrap "${bwrap_args[@]}" sh -lc '
+      echo "inside auth:"
+      ls -l "$HOME/.codex/auth.json"
+      head -c 80 "$HOME/.codex/auth.json"
+      echo
+    '
+  fi
+
+  local config_args=()
+  add_config_args "$model_provider" "$provider_file"
+  exec bwrap "${bwrap_args[@]}" "$codex_bin" "${config_args[@]}" "$@"
+}
+
+acquire_lock() {
+  local lock_dir="$1"
+  local printed_wait=0
+  mkdir -p "$(dirname "$lock_dir")"
+
+  while ! mkdir "$lock_dir" 2>/dev/null; do
+    if (( ! printed_wait )); then
+      echo "warning: waiting for codex-as auth swap lock: $lock_dir" >&2
+      printed_wait=1
+    fi
+    sleep 1
+  done
+
+  printf 'pid=%s\n' "$$" >"$lock_dir/owner"
+}
+
+run_codex_with_locked_auth_swap() {
+  local auth_file="$1"
+  local model_provider="$2"
+  local codex_bin="$3"
+  local debug_auth="$4"
+  local provider_file="$5"
+  shift 5
+
+  local target="$HOME/.codex/auth.json"
+  local home lock_dir backup had_original status child_pid hold_seconds lock_mode
+  home="$(codex_as_home)"
+  lock_dir="$home/lock"
+  backup=""
+  had_original=0
+  hold_seconds="${CODEX_AS_MACOS_AUTH_HOLD_SECONDS:-3}"
+  lock_mode="${CODEX_AS_MACOS_LOCK_MODE:-launch}"
+
+  if (( ! debug_auth )) && [[ ! -x "$codex_bin" ]]; then
+    echo "error: codex not found or not executable: $codex_bin" >&2
+    exit 127
+  fi
+
+  if [[ ! -f "$auth_file" ]]; then
+    echo "error: auth file does not exist: $auth_file" >&2
+    exit 1
+  fi
+
+  warn_if_world_readable "$auth_file"
+  echo "warning: bwrap not found; using macOS locked auth swap fallback" >&2
+  if [[ "$lock_mode" == "session" ]]; then
+    echo "warning: macOS auth swap lock will be held until Codex exits" >&2
+  else
+    echo "warning: macOS auth swap lock will be held for ${hold_seconds}s during Codex startup" >&2
+  fi
+
+  mkdir -p "$HOME/.codex" "$home"
+  acquire_lock "$lock_dir"
+  backup="$(mktemp "$home/auth.json.backup.XXXXXX")"
+
+  restore_auth() {
+    if [[ -n "${backup:-}" && -f "$backup" ]]; then
+      if (( had_original )); then
+        cp "$backup" "$target"
+        chmod 600 "$target"
+      else
+        rm -f "$target"
+      fi
+      rm -f "$backup"
+    fi
+    rm -rf "$lock_dir"
+  }
+
+  trap restore_auth EXIT INT TERM
+
+  if [[ -e "$target" ]]; then
+    cp "$target" "$backup"
+    had_original=1
+  else
+    : >"$backup"
+    had_original=0
+  fi
+
+  cp "$auth_file" "$target"
+  chmod 600 "$target"
+
+  if (( debug_auth )); then
+    echo "inside auth:"
+    ls -l "$target"
+    head -c 80 "$target"
+    echo
+    restore_auth
+    trap - EXIT INT TERM
+    return 0
+  fi
+
+  local config_args=()
+  add_config_args "$model_provider" "$provider_file"
+
+  if [[ "$lock_mode" == "session" ]]; then
+    set +e
+    "$codex_bin" "${config_args[@]}" "$@"
+    status=$?
+    set -e
+
+    restore_auth
+    trap - EXIT INT TERM
+    return "$status"
+  fi
+
+  set +e
+  "$codex_bin" "${config_args[@]}" "$@" &
+  child_pid=$!
+  sleep "$hold_seconds"
+  restore_auth
+  trap - EXIT INT TERM
+  wait "$child_pid"
+  status=$?
+  set -e
+
+  return "$status"
+}
+
+run_codex_with_auth() {
+  local auth_file="$1"
+  local model_provider="$2"
+  local codex_bin="$3"
+  local debug_auth="$4"
+  local provider_file="$5"
+  shift 5
+
+  if has_bwrap; then
+    run_codex_with_bwrap "$auth_file" "$model_provider" "$codex_bin" "$debug_auth" "$provider_file" "$@"
+  elif [[ "$(uname -s)" == "Darwin" ]]; then
+    run_codex_with_locked_auth_swap "$auth_file" "$model_provider" "$codex_bin" "$debug_auth" "$provider_file" "$@"
+  else
+    check_bwrap
+  fi
+}
+
+add_config_args() {
+  local model_provider="$1"
+  local provider_file="$2"
+  local line key value
+
+  if [[ -n "$provider_file" && -f "$provider_file" ]]; then
+    while IFS= read -r line; do
+      [[ "$line" =~ ^[[:space:]]*([A-Za-z0-9_-]+)[[:space:]]*=[[:space:]]*(.+)$ ]] || continue
+      key="${BASH_REMATCH[1]}"
+      value="${BASH_REMATCH[2]}"
+      config_args+=( -c "model_providers.$model_provider.$key=$value" )
+    done <"$provider_file"
+  fi
+
+  config_args+=( -c "model_provider=$(toml_string "$model_provider")" )
+}
+
+run_named_profile() {
+  local profile="$1"
+  shift
+  local auth_file model_provider debug_auth codex_bin
+
+  case "$profile" in
+    oauth)
+      auth_file="${CODEX_AS_OAUTH_AUTH:-$HOME/.codex/auth-oauth.json}"
+      model_provider="${CODEX_AS_OAUTH_PROVIDER:-openai}"
+      ;;
+    api|api-key)
+      auth_file="${CODEX_AS_API_AUTH:-$HOME/.codex/auth-api-key.json}"
+      model_provider="${CODEX_AS_API_PROVIDER:-custom}"
+      ;;
+    *)
+      usage
+      ;;
+  esac
+
+  debug_auth=0
+  if [[ "${1:-}" == "--debug-auth" ]]; then
+    debug_auth=1
+    shift
+  fi
+
+  codex_bin="$(resolve_codex_binary)"
+  run_codex_with_auth "$auth_file" "$model_provider" "$codex_bin" "$debug_auth" "" "$@"
+}
+
+save_profile() {
+  local name="${1:-}"
+  [[ -n "$name" ]] || usage
+  validate_name "$name"
+  shift || true
+
+  local provider=""
+  while (($#)); do
+    case "$1" in
+      --provider)
+        shift
+        provider="${1:-}"
+        [[ -n "$provider" ]] || usage
+        shift
+        ;;
+      *)
+        usage
+        ;;
+    esac
+  done
+
+  local current_auth="$HOME/.codex/auth.json"
+  local current_config="$HOME/.codex/config.toml"
+  local dir saved_provider provider_snapshot
+  dir="$(profile_dir "$name")"
+
+  if [[ ! -f "$current_auth" ]]; then
+    echo "error: current auth file does not exist: $current_auth" >&2
+    exit 1
+  fi
+
+  if [[ -z "$provider" ]]; then
+    if [[ ! -f "$current_config" ]]; then
+      echo "error: model_provider not found; pass --provider PROVIDER" >&2
+      exit 1
+    fi
+    provider="$(extract_model_provider "$current_config")"
+    if [[ -z "$provider" ]]; then
+      echo "error: model_provider not found; pass --provider PROVIDER" >&2
+      exit 1
+    fi
+  fi
+
+  saved_provider="$provider"
+  provider_snapshot=""
+  if [[ -f "$current_config" ]]; then
+    saved_provider="$(provider_name_for_profile "$name")"
+    provider_snapshot="$(extract_provider_config "$current_config" "$provider" "$saved_provider")"
+    if [[ -z "$provider_snapshot" ]]; then
+      saved_provider="$provider"
+    fi
+  fi
+
+  mkdir -p "$dir"
+  cp "$current_auth" "$dir/auth.json"
+  chmod 600 "$dir/auth.json"
+  printf 'model_provider = %s\n' "$(toml_string "$saved_provider")" >"$dir/profile.toml"
+  if [[ -n "$provider_snapshot" ]]; then
+    printf '%s\n' "$provider_snapshot" >"$dir/provider.toml"
+  else
+    rm -f "$dir/provider.toml"
+  fi
+  printf 'saved profile: %s\n' "$name"
+}
+
+switch_profile() {
+  local name="${1:-}"
+  [[ -n "$name" ]] || usage
+  validate_name "$name"
+  shift || true
+  (($# == 0)) || usage
+
+  local home dir tmp
+  home="$(codex_as_home)"
+  dir="$(profile_dir "$name")"
+  if [[ ! -f "$dir/auth.json" || ! -f "$dir/profile.toml" ]]; then
+    echo "error: profile does not exist: $name" >&2
+    exit 1
+  fi
+
+  mkdir -p "$home"
+  tmp="$home/selected.$$"
+  printf '%s\n' "$name" >"$tmp"
+  mv "$tmp" "$home/selected"
+  printf 'selected profile: %s\n' "$name"
+}
+
+current_profile() {
+  local selected
+  selected="$(codex_as_home)/selected"
+  if [[ ! -f "$selected" ]]; then
+    echo "error: no selected profile" >&2
+    exit 1
+  fi
+  sed -n '1p' "$selected"
+}
+
+list_profiles() {
+  local home profiles selected name prefix
+  home="$(codex_as_home)"
+  profiles="$home/profiles"
+  selected=""
+  if [[ -f "$home/selected" ]]; then
+    selected="$(sed -n '1p' "$home/selected")"
+  fi
+
+  [[ -d "$profiles" ]] || return 0
+  while IFS= read -r dir; do
+    name="$(basename "$dir")"
+    prefix=" "
+    if [[ "$name" == "$selected" ]]; then
+      prefix="*"
+    fi
+    printf '%s %s\n' "$prefix" "$name"
+  done < <(find "$profiles" -mindepth 1 -maxdepth 1 -type d | sort)
+}
+
+completion_source() {
+  local dir
+  dir="$(script_dir)"
+
+  for candidate in \
+    "$dir/../completions/_codex-as" \
+    "$dir/completions/_codex-as" \
+    "${XDG_DATA_HOME:-$HOME/.local/share}/codex-as/completions/_codex-as"; do
+    if [[ -f "$candidate" ]]; then
+      canonical_path "$candidate"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+install_completions() {
+  local action="${1:-}"
+  shift || true
+  (($# == 0)) || usage
+
+  local comp_dir="$HOME/.zsh-completions"
+  local comp_target="$comp_dir/_codex-as"
+  local comp_source
+
+  case "$action" in
+    install)
+      if ! comp_source="$(completion_source)"; then
+        echo "error: completion file not found" >&2
+        echo "looked near $(script_dir) and ${XDG_DATA_HOME:-$HOME/.local/share}/codex-as/completions" >&2
+        exit 1
+      fi
+      mkdir -p "$comp_dir"
+      ln -sf "$comp_source" "$comp_target"
+      printf 'installed zsh completion: %s -> %s\n' "$comp_target" "$comp_source"
+      if command -v zsh >/dev/null 2>&1 && ! zsh -c 'print -r -- $fpath' 2>/dev/null | grep -F -- "$comp_dir" >/dev/null; then
+        printf '\nwarning: ~/.zsh-completions is not on your fpath.\n' >&2
+        # shellcheck disable=SC2016
+        printf 'add this before compinit in ~/.zshrc:\n\n  fpath=(~/.zsh-completions $fpath)\n\n' >&2
+      fi
+      printf 'run exec zsh to reload completions\n'
+      ;;
+    uninstall)
+      if [[ -L "$comp_target" ]]; then
+        rm "$comp_target"
+        printf 'removed zsh completion: %s\n' "$comp_target"
+      elif [[ -e "$comp_target" ]]; then
+        echo "warning: $comp_target exists but is not a symlink; remove it manually if desired" >&2
+      else
+        printf 'no zsh completion installed at %s\n' "$comp_target"
+      fi
+      ;;
+    *)
+      echo "error: usage: codex-as completions [install|uninstall]" >&2
+      exit 2
+      ;;
+  esac
+}
+
+run_selected_profile() {
+  local codex_bin="" debug_auth=0
+  while (($#)); do
+    case "$1" in
+      --codex-bin)
+        shift
+        codex_bin="${1:-}"
+        [[ -n "$codex_bin" ]] || usage
+        shift
+        ;;
+      --debug-auth)
+        debug_auth=1
+        shift
+        ;;
+      --)
+        shift
+        break
+        ;;
+      *)
+        break
+        ;;
+    esac
+  done
+
+  if [[ -z "$codex_bin" ]]; then
+    codex_bin="$(resolve_codex_binary)"
+  fi
+
+  local selected name dir provider auth_file provider_file
+  selected="$(codex_as_home)/selected"
+  if [[ ! -f "$selected" ]]; then
+    echo "error: no selected profile; run codex-as switch NAME first" >&2
+    exit 1
+  fi
+
+  name="$(sed -n '1p' "$selected")"
+  validate_name "$name"
+  dir="$(profile_dir "$name")"
+  auth_file="$dir/auth.json"
+  provider_file="$dir/provider.toml"
+  provider="$(extract_model_provider "$dir/profile.toml")"
+  if [[ -z "$provider" ]]; then
+    echo "error: saved profile is missing model_provider: $name" >&2
+    exit 1
+  fi
+
+  run_codex_with_auth "$auth_file" "$provider" "$codex_bin" "$debug_auth" "$provider_file" "$@"
+}
+
+command_name="${1:-}"
+[[ -n "$command_name" ]] || usage
+shift || true
+
+case "$command_name" in
+  oauth|api|api-key)
+    run_named_profile "$command_name" "$@"
+    ;;
+  save)
+    save_profile "$@"
+    ;;
+  switch)
+    switch_profile "$@"
+    ;;
+  current)
+    (($# == 0)) || usage
+    current_profile
+    ;;
+  list)
+    (($# == 0)) || usage
+    list_profiles
+    ;;
+  completions)
+    install_completions "$@"
+    ;;
+  install-completions)
+    install_completions install "$@"
+    ;;
+  run)
+    run_selected_profile "$@"
+    ;;
+  *)
+    unknown_command "$command_name"
+    ;;
+esac

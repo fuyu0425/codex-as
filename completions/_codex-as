@@ -1,0 +1,74 @@
+#compdef codex-as
+
+_codex_as_profiles() {
+  local -a profiles
+  profiles=(${(f)"$(codex-as list 2>/dev/null | sed -E 's/^[* ] //' )"})
+  if (( ${#profiles[@]} )); then
+    _describe -t profiles 'codex-as profile' profiles
+  else
+    _message 'profile name'
+  fi
+}
+
+_codex_as() {
+  local -a commands
+  commands=(
+    'oauth:Run Codex with ~/.codex/auth-oauth.json and provider openai'
+    'api:Run Codex with ~/.codex/auth-api-key.json and provider custom'
+    'api-key:Alias for api'
+    'save:Save current ~/.codex/auth.json as a named profile'
+    'switch:Select a saved profile'
+    'current:Print selected profile'
+    'list:List saved profiles'
+    'run:Run Codex with selected profile'
+    'completions:Install or uninstall zsh completions'
+    'install-completions:Install zsh completions'
+  )
+
+  if (( CURRENT == 2 )); then
+    _describe -t commands 'codex-as command' commands
+    return
+  fi
+
+  case "${words[2]}" in
+    save)
+      if (( CURRENT == 3 )); then
+        _message 'profile name'
+      else
+        local -a save_opts
+        save_opts=(
+          '--provider:Provider name to save'
+        )
+        _describe -t options 'save option' save_opts
+      fi
+      ;;
+    switch)
+      _codex_as_profiles
+      ;;
+    run)
+      local -a run_opts
+      run_opts=(
+        '--codex-bin:Path to real Codex binary'
+        '--debug-auth:Print auth file seen by Codex'
+      )
+      _describe -t options 'run option' run_opts
+      ;;
+    completions)
+      local -a comp_actions
+      comp_actions=(
+        'install:Symlink completion to ~/.zsh-completions/'
+        'uninstall:Remove completion symlink'
+      )
+      _describe -t actions 'completions action' comp_actions
+      ;;
+    oauth|api|api-key)
+      local -a profile_opts
+      profile_opts=(
+        '--debug-auth:Print auth file seen by Codex'
+      )
+      _describe -t options 'profile option' profile_opts
+      ;;
+  esac
+}
+
+_codex_as "$@"
