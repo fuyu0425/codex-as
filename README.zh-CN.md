@@ -1,6 +1,6 @@
 # codex-as
 
-[English](README.md) · 简体中文 · [🇹🇼 繁體中文](README.zh-TW.md)
+[English](README.md) · 🇨🇳 简体中文 · [🇹🇼 繁體中文](README.zh-TW.md)
 
 `codex-as` 是一个很小的 Codex CLI 账号/配置切换器。
 
