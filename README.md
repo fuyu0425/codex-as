@@ -39,6 +39,44 @@ codex
 For Linux per-process auth substitution, install `bubblewrap` so `bwrap` is on
 `PATH`. On macOS, `codex-as` uses the startup-window fallback described below.
 
+## Built-In Profiles
+
+For quick explicit use:
+
+```bash
+codex-as oauth
+codex-as api
+codex-as api-key
+```
+
+Shortcut resolution order:
+
+1. If a saved profile named `oauth` or `api` exists under
+   `~/.config/codex-as/profiles/`, use that saved profile's `auth.json`,
+   `profile.toml`, and optional `provider.toml`.
+2. Otherwise, fall back to the legacy fixed files:
+
+```text
+~/.codex/auth-oauth.json
+~/.codex/auth-api-key.json
+```
+
+Fallback providers:
+
+```text
+oauth   ~/.codex/auth-oauth.json     provider openai
+api     ~/.codex/auth-api-key.json   provider custom
+```
+
+Environment variables override both saved-profile lookup and fallback defaults:
+
+```bash
+CODEX_AS_OAUTH_AUTH=/path/to/oauth.json codex-as oauth
+CODEX_AS_API_AUTH=/path/to/api.json codex-as api
+CODEX_AS_OAUTH_PROVIDER=openai codex-as oauth
+CODEX_AS_API_PROVIDER=custom codex-as api
+```
+
 ## Why
 
 Codex reads auth from:
@@ -147,6 +185,19 @@ or config files.
 - Linux: `bubblewrap` available as `bwrap`
 - macOS: no extra dependency, but see the macOS fallback notes below
 
+Install `bubblewrap` on Linux:
+
+```bash
+# Debian / Ubuntu
+sudo apt install bubblewrap
+
+# Fedora
+sudo dnf install bubblewrap
+
+# Arch Linux
+sudo pacman -S bubblewrap
+```
+
 ## Install
 
 Clone the repo, then install the two scripts:
@@ -254,7 +305,7 @@ model_provider = "codex-as-api"
 Example `provider.toml`:
 
 ```toml
-base_url = "https://example.internal:51414"
+base_url = "https://api.example.com/v1"
 name = "codex-as-api"
 requires_openai_auth = true
 wire_api = "responses"
@@ -270,7 +321,7 @@ parsed as TOML. For example:
 
 ```bash
 codex -c 'model_provider="custom"'
-codex -c 'model_providers.custom.base_url="https://example.internal:51414"'
+codex -c 'model_providers.custom.base_url="https://api.example.com/v1"'
 ```
 
 `codex-as` uses that mechanism to replay saved providers. A saved `api` profile
@@ -278,7 +329,7 @@ with provider `codex-as-api` launches Codex roughly like:
 
 ```bash
 codex \
-  -c 'model_providers.codex-as-api.base_url="https://example.internal:51414"' \
+  -c 'model_providers.codex-as-api.base_url="https://api.example.com/v1"' \
   -c 'model_providers.codex-as-api.name="codex-as-api"' \
   -c 'model_providers.codex-as-api.requires_openai_auth=true' \
   -c 'model_providers.codex-as-api.wire_api="responses"' \
@@ -368,32 +419,6 @@ for your workflow, use `CODEX_AS_MACOS_LOCK_MODE=session`.
 
 This is not per-process filesystem isolation. It narrows the mutation window
 and serializes only startup by default.
-
-## Built-In Profiles
-
-For quick explicit use without saved profiles:
-
-```bash
-codex-as oauth
-codex-as api
-codex-as api-key
-```
-
-Defaults:
-
-```text
-oauth   ~/.codex/auth-oauth.json     provider openai
-api     ~/.codex/auth-api-key.json   provider custom
-```
-
-Override paths or providers:
-
-```bash
-CODEX_AS_OAUTH_AUTH=/path/to/oauth.json codex-as oauth
-CODEX_AS_API_AUTH=/path/to/api.json codex-as api
-CODEX_AS_OAUTH_PROVIDER=openai codex-as oauth
-CODEX_AS_API_PROVIDER=custom codex-as api
-```
 
 ## Commands
 
@@ -492,8 +517,15 @@ selected provider exists under `[model_providers.<name>]`.
 
 ### `bwrap not found`
 
-On Linux, install bubblewrap. On macOS, the locked-swap fallback is used
-automatically.
+On Linux, install bubblewrap:
+
+```bash
+sudo apt install bubblewrap      # Debian / Ubuntu
+sudo dnf install bubblewrap      # Fedora
+sudo pacman -S bubblewrap        # Arch Linux
+```
+
+On macOS, the locked-swap fallback is used automatically.
 
 ### Existing `auth.json` changes unexpectedly on macOS
 

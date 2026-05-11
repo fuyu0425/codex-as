@@ -35,6 +35,19 @@ codex
 
 Linux 用户需要安装 `bubblewrap`，确保 `bwrap` 在 `PATH` 中。macOS 用户不需要额外依赖。
 
+Linux 安装示例：
+
+```bash
+# Debian / Ubuntu
+sudo apt install bubblewrap
+
+# Fedora
+sudo dnf install bubblewrap
+
+# Arch Linux
+sudo pacman -S bubblewrap
+```
+
 ## 常用命令
 
 保存当前 OAuth 登录：
@@ -67,7 +80,20 @@ codex-as oauth
 codex-as api
 ```
 
-如果已经保存了同名 profile，快捷命令会优先使用保存的 profile。
+快捷命令的解析顺序：
+
+1. 如果 `~/.config/codex-as/profiles/` 下面已经有同名的 `oauth` 或 `api`
+   保存 profile，优先使用该 profile 的 `auth.json`、`profile.toml` 和可选
+   `provider.toml`。
+2. 否则回退到固定文件：
+
+```text
+oauth   ~/.codex/auth-oauth.json     provider openai
+api     ~/.codex/auth-api-key.json   provider custom
+```
+
+`CODEX_AS_OAUTH_AUTH`、`CODEX_AS_API_AUTH`、`CODEX_AS_OAUTH_PROVIDER`、
+`CODEX_AS_API_PROVIDER` 会覆盖上述两种行为。
 
 ## 为什么不是直接复制或软链接 auth.json？
 

@@ -17,6 +17,10 @@ with selected auth/provider profiles.
 - On Linux, prefer the `bubblewrap` backend for per-process auth substitution.
 - On macOS, keep the startup-window fallback as the default and session-lock
   mode as the stricter opt-in behavior.
+- When changing user-facing README content, update all language variants:
+  `README.md`, `README.zh-CN.md`, and `README.zh-TW.md`.
+- Keep dependency and install instructions synchronized across all README
+  language variants, including `bubblewrap` package install commands.
 
 ## Verification
 
