@@ -1,5 +1,7 @@
 # codex-as
 
+English · [简体中文](README.zh-CN.md) · [🇹🇼 繁體中文](README.zh-TW.md)
+
 `codex-as` is a tiny account/profile switcher for the Codex CLI.
 
 It lets you save multiple Codex auth/provider setups and run `codex` as the
@@ -13,6 +15,29 @@ sees the selected auth file at `~/.codex/auth.json`. On macOS, where
 `bubblewrap` is not available, it uses a locked temporary auth-file swap during
 the Codex startup window, then restores the original file while the Codex child
 continues running.
+
+## TLDR
+
+```bash
+git clone https://github.com/fuyu0425/codex-as.git
+cd codex-as
+
+mkdir -p ~/.local/bin ~/.local/share/codex-as/completions
+install -m 0755 bin/codex-as ~/.local/bin/codex-as
+install -m 0755 bin/codex ~/.local/bin/codex
+install -m 0644 completions/_codex-as ~/.local/share/codex-as/completions/_codex-as
+
+# Put the shim before the real Codex binary.
+export PATH="$HOME/.local/bin:$PATH"
+
+# Save the current Codex login, select it, then use codex normally.
+codex-as save oauth --provider openai
+codex-as switch oauth
+codex
+```
+
+For Linux per-process auth substitution, install `bubblewrap` so `bwrap` is on
+`PATH`. On macOS, `codex-as` uses the startup-window fallback described below.
 
 ## Why
 

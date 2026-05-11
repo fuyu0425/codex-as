@@ -102,6 +102,18 @@ test_oauth_profile_mounts_oauth_auth_and_openai_provider() {
   assert_file_contains "$tmp/capture" "--dangerously-bypass-approvals-and-sandbox"
 }
 
+test_named_profile_prefers_saved_profile_auth_when_present() {
+  local tmp="$1"
+  CODEX_AS_HOME="$HOME/.config/codex-as" "$SCRIPT" save oauth
+  rm "$HOME/.codex/auth-oauth.json"
+
+  CODEX_AS_HOME="$HOME/.config/codex-as" "$SCRIPT" oauth
+
+  assert_file_contains "$tmp/capture" "$HOME/.config/codex-as/profiles/oauth/auth.json"
+  assert_file_contains "$tmp/capture" 'model_providers.codex-as-oauth.base_url="https://example.test/v1"'
+  assert_file_contains "$tmp/capture" 'model_provider="codex-as-oauth"'
+}
+
 test_env_overrides_auth_and_provider() {
   local tmp="$1"
   printf 'alt\n' >"$tmp/alt-auth.json"
@@ -430,6 +442,7 @@ test_install_completions_alias_installs_zsh_file() {
 
 run_case "api profile binds api auth and custom provider" test_api_profile_mounts_api_auth_and_custom_provider
 run_case "oauth profile binds oauth auth and openai provider" test_oauth_profile_mounts_oauth_auth_and_openai_provider
+run_case "named profile prefers saved profile auth" test_named_profile_prefers_saved_profile_auth_when_present
 run_case "env overrides auth and provider" test_env_overrides_auth_and_provider
 run_case "missing auth target creates placeholder only" test_creates_missing_auth_placeholder_without_overwriting_selected_auth
 run_case "missing bwrap has clear error" test_missing_bwrap_is_clear_error

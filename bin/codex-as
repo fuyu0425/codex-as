@@ -472,14 +472,16 @@ add_config_args() {
 run_named_profile() {
   local profile="$1"
   shift
-  local auth_file model_provider debug_auth codex_bin
+  local auth_file model_provider debug_auth codex_bin profile_key provider_file saved_dir
 
   case "$profile" in
     oauth)
+      profile_key="oauth"
       auth_file="${CODEX_AS_OAUTH_AUTH:-$HOME/.codex/auth-oauth.json}"
       model_provider="${CODEX_AS_OAUTH_PROVIDER:-openai}"
       ;;
     api|api-key)
+      profile_key="api"
       auth_file="${CODEX_AS_API_AUTH:-$HOME/.codex/auth-api-key.json}"
       model_provider="${CODEX_AS_API_PROVIDER:-custom}"
       ;;
@@ -488,6 +490,30 @@ run_named_profile() {
       ;;
   esac
 
+  provider_file=""
+  saved_dir="$(profile_dir "$profile_key")"
+  if [[ "$profile_key" == "oauth" && -z "${CODEX_AS_OAUTH_AUTH:-}" && -f "$saved_dir/auth.json" ]]; then
+    auth_file="$saved_dir/auth.json"
+    if [[ -z "${CODEX_AS_OAUTH_PROVIDER:-}" && -f "$saved_dir/profile.toml" ]]; then
+      model_provider="$(extract_model_provider "$saved_dir/profile.toml")"
+      if [[ -n "$model_provider" ]]; then
+        provider_file="$saved_dir/provider.toml"
+      else
+        model_provider="openai"
+      fi
+    fi
+  elif [[ "$profile_key" == "api" && -z "${CODEX_AS_API_AUTH:-}" && -f "$saved_dir/auth.json" ]]; then
+    auth_file="$saved_dir/auth.json"
+    if [[ -z "${CODEX_AS_API_PROVIDER:-}" && -f "$saved_dir/profile.toml" ]]; then
+      model_provider="$(extract_model_provider "$saved_dir/profile.toml")"
+      if [[ -n "$model_provider" ]]; then
+        provider_file="$saved_dir/provider.toml"
+      else
+        model_provider="custom"
+      fi
+    fi
+  fi
+
   debug_auth=0
   if [[ "${1:-}" == "--debug-auth" ]]; then
     debug_auth=1
@@ -495,7 +521,7 @@ run_named_profile() {
   fi
 
   codex_bin="$(resolve_codex_binary)"
-  run_codex_with_auth "$auth_file" "$model_provider" "$codex_bin" "$debug_auth" "" "$@"
+  run_codex_with_auth "$auth_file" "$model_provider" "$codex_bin" "$debug_auth" "$provider_file" "$@"
 }
 
 save_profile() {
