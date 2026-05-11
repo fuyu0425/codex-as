@@ -242,6 +242,18 @@ test_run_uses_selected_saved_profile_and_real_codex_binary() {
   assert_file_contains "$tmp/capture" "gpt-5.5"
 }
 
+test_direct_saved_profile_name_runs_profile() {
+  local tmp="$1"
+  CODEX_AS_HOME="$HOME/.config/codex-as" "$SCRIPT" save work
+  CODEX_AS_HOME="$HOME/.config/codex-as" "$SCRIPT" work -m gpt-5.5
+
+  assert_file_contains "$tmp/capture" "$HOME/.config/codex-as/profiles/work/auth.json"
+  assert_file_contains "$tmp/capture" 'model_providers.codex-as-work.base_url="https://example.test/v1"'
+  assert_file_contains "$tmp/capture" 'model_provider="codex-as-work"'
+  assert_file_contains "$tmp/capture" "-m"
+  assert_file_contains "$tmp/capture" "gpt-5.5"
+}
+
 test_run_preserves_legacy_profile_without_provider_snapshot() {
   local tmp="$1"
   local dir="$HOME/.config/codex-as/profiles/legacy"
@@ -265,6 +277,15 @@ test_run_without_selected_profile_is_clear_error() {
     return 1
   fi
   assert_file_contains "$tmp/err" "error: no selected profile"
+}
+
+test_direct_missing_profile_is_clear_error() {
+  local tmp="$1"
+  if CODEX_AS_HOME="$HOME/.config/codex-as" "$SCRIPT" missing >"$tmp/out" 2>"$tmp/err"; then
+    return 1
+  fi
+
+  assert_file_contains "$tmp/err" "error: profile does not exist: missing"
 }
 
 test_codex_shim_calls_codex_as_with_real_codex_binary() {
@@ -320,6 +341,26 @@ REAL_CODEX
 
   assert_file_contains "$tmp/shim-capture" "-m"
   assert_file_contains "$tmp/shim-capture" "gpt-5.5"
+}
+
+test_codex_shim_errors_when_codex_as_is_missing() {
+  local tmp="$1"
+  local shim_dir real_dir
+  shim_dir="$tmp/shim"
+  real_dir="$tmp/real"
+  mkdir -p "$shim_dir" "$real_dir"
+  ln -s "$SHIM" "$shim_dir/codex"
+  cat >"$real_dir/codex" <<'REAL_CODEX'
+#!/usr/bin/env bash
+exit 0
+REAL_CODEX
+  chmod +x "$real_dir/codex"
+
+  if PATH="$shim_dir:$real_dir:/usr/bin:/bin" "$shim_dir/codex" >"$tmp/out" 2>"$tmp/err"; then
+    return 1
+  fi
+
+  assert_file_contains "$tmp/err" "error: codex-as not found in PATH"
 }
 
 test_macos_without_bwrap_swaps_auth_under_lock_and_restores() {
@@ -455,10 +496,13 @@ run_case "save accepts provider override" test_save_current_profile_accepts_prov
 run_case "switch selects profile and current prints it" test_switch_selects_existing_profile_and_current_prints_it
 run_case "list marks selected profile" test_list_marks_selected_profile
 run_case "run uses selected saved profile" test_run_uses_selected_saved_profile_and_real_codex_binary
+run_case "direct saved profile name runs profile" test_direct_saved_profile_name_runs_profile
 run_case "run preserves legacy profile without provider snapshot" test_run_preserves_legacy_profile_without_provider_snapshot
 run_case "run without selected profile has clear error" test_run_without_selected_profile_is_clear_error
+run_case "direct missing profile has clear error" test_direct_missing_profile_is_clear_error
 run_case "codex shim forwards to codex-as run" test_codex_shim_calls_codex_as_with_real_codex_binary
 run_case "codex shim passes through with no selected profile" test_codex_shim_passes_through_when_no_profile_is_selected
+run_case "codex shim errors when codex-as is missing" test_codex_shim_errors_when_codex_as_is_missing
 run_case "macOS without bwrap swaps auth under lock and restores" test_macos_without_bwrap_swaps_auth_under_lock_and_restores
 run_case "macOS fallback restores before child exits by default" test_macos_fallback_restores_auth_before_child_exits_by_default
 run_case "macOS session lock mode restores after child exits" test_macos_session_lock_mode_restores_after_child_exits

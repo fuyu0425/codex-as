@@ -32,6 +32,11 @@ if [[ -z "${real_codex:-}" ]]; then
   exit 127
 fi
 
+if ! command -v codex-as >/dev/null 2>&1; then
+  echo "error: codex-as not found in PATH; install codex-as next to the codex wrapper" >&2
+  exit 127
+fi
+
 if ! codex-as current >/dev/null 2>&1; then
   exec "$real_codex" "$@"
 fi

@@ -41,7 +41,14 @@ For Linux per-process auth substitution, install `bubblewrap` so `bwrap` is on
 
 ## Built-In Profiles
 
-For quick explicit use:
+For quick explicit use, any saved profile can be run directly:
+
+```bash
+codex-as work
+codex-as work -m gpt-5.5
+```
+
+The built-in shortcut names also work:
 
 ```bash
 codex-as oauth
@@ -51,10 +58,10 @@ codex-as api-key
 
 Shortcut resolution order:
 
-1. If a saved profile named `oauth` or `api` exists under
+1. If a saved profile with that name exists under
    `~/.config/codex-as/profiles/`, use that saved profile's `auth.json`,
    `profile.toml`, and optional `provider.toml`.
-2. Otherwise, fall back to the legacy fixed files:
+2. For `oauth`, `api`, and `api-key` only, fall back to the legacy fixed files:
 
 ```text
 ~/.codex/auth-oauth.json
@@ -423,6 +430,7 @@ and serializes only startup by default.
 ## Commands
 
 ```text
+codex-as PROFILE [--debug-auth] [codex args...]
 codex-as save NAME [--provider PROVIDER]
 codex-as switch NAME
 codex-as current

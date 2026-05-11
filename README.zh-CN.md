@@ -73,7 +73,14 @@ codex-as list
 codex-as current
 ```
 
-也可以直接运行内置快捷 profile：
+也可以直接运行任意保存的 profile：
+
+```bash
+codex-as work
+codex-as work -m gpt-5.5
+```
+
+内置快捷 profile 也可以直接运行：
 
 ```bash
 codex-as oauth
@@ -82,10 +89,10 @@ codex-as api
 
 快捷命令的解析顺序：
 
-1. 如果 `~/.config/codex-as/profiles/` 下面已经有同名的 `oauth` 或 `api`
-   保存 profile，优先使用该 profile 的 `auth.json`、`profile.toml` 和可选
+1. 如果 `~/.config/codex-as/profiles/` 下面有同名保存 profile，优先使用
+   该 profile 的 `auth.json`、`profile.toml` 和可选
    `provider.toml`。
-2. 否则回退到固定文件：
+2. 只有 `oauth`、`api`、`api-key` 会在没有保存 profile 时回退到固定文件：
 
 ```text
 oauth   ~/.codex/auth-oauth.json     provider openai

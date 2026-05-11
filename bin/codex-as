@@ -4,6 +4,7 @@ set -euo pipefail
 usage() {
   cat >&2 <<'EOF'
 usage:
+  codex-as PROFILE [--debug-auth] [codex args...]
   codex-as oauth [--debug-auth] [codex args...]
   codex-as api [--debug-auth] [codex args...]
   codex-as api-key [--debug-auth] [codex args...]
@@ -16,8 +17,11 @@ usage:
   codex-as install-completions
 
 profiles:
-  oauth      use ~/.codex/auth-oauth.json and model_provider="openai"
-  api        use ~/.codex/auth-api-key.json and model_provider="custom"
+  Any non-command name runs the saved profile with that name, for example:
+    codex-as work
+
+  oauth      saved profile oauth, or fallback ~/.codex/auth-oauth.json + openai
+  api        saved profile api, or fallback ~/.codex/auth-api-key.json + custom
   api-key    alias for api
 
 storage:
@@ -524,6 +528,37 @@ run_named_profile() {
   run_codex_with_auth "$auth_file" "$model_provider" "$codex_bin" "$debug_auth" "$provider_file" "$@"
 }
 
+run_saved_profile() {
+  local name="$1"
+  shift
+  validate_name "$name"
+
+  local dir auth_file provider_file provider debug_auth codex_bin
+  dir="$(profile_dir "$name")"
+  auth_file="$dir/auth.json"
+  provider_file="$dir/provider.toml"
+
+  if [[ ! -f "$auth_file" || ! -f "$dir/profile.toml" ]]; then
+    echo "error: profile does not exist: $name" >&2
+    exit 1
+  fi
+
+  provider="$(extract_model_provider "$dir/profile.toml")"
+  if [[ -z "$provider" ]]; then
+    echo "error: saved profile is missing model_provider: $name" >&2
+    exit 1
+  fi
+
+  debug_auth=0
+  if [[ "${1:-}" == "--debug-auth" ]]; then
+    debug_auth=1
+    shift
+  fi
+
+  codex_bin="$(resolve_codex_binary)"
+  run_codex_with_auth "$auth_file" "$provider" "$codex_bin" "$debug_auth" "$provider_file" "$@"
+}
+
 save_profile() {
   local name="${1:-}"
   [[ -n "$name" ]] || usage
@@ -782,6 +817,13 @@ case "$command_name" in
     run_selected_profile "$@"
     ;;
   *)
-    unknown_command "$command_name"
+    if [[ -d "$(profile_dir "$command_name")" ]]; then
+      run_saved_profile "$command_name" "$@"
+    elif [[ -n "$(suggest_command "$command_name")" ]]; then
+      unknown_command "$command_name"
+    else
+      echo "error: profile does not exist: $command_name" >&2
+      exit 1
+    fi
     ;;
 esac
