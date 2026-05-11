@@ -556,6 +556,14 @@ shell is force-killed during that window, inspect:
 - Linux `bubblewrap` usage here is for filesystem view substitution, not a
   hardened sandbox.
 
+## Safety / Limitations
+
+- This is not a security sandbox.
+- On Linux, bubblewrap is used only for per-process auth-file substitution.
+- On macOS, `codex-as` temporarily swaps `auth.json` during Codex startup and
+  restores it.
+- Back up `~/.codex/auth.json` before first use if you are worried.
+
 ## License
 
 Choose a license before publishing this repository.

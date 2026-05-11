@@ -156,3 +156,10 @@ rehash
 
 如果出现 `Model provider custom not found`，说明全局 `config.toml` 没有定义该 provider。
 重新从包含 provider 定义的配置保存 profile，或者使用已保存的 `provider.toml`。
+
+## 安全 / 限制
+
+- 这不是安全沙箱。
+- Linux 上的 bubblewrap 只用于单进程 auth 文件替换。
+- macOS 上，`codex-as` 会在 Codex 启动期间临时替换 `auth.json`，随后恢复。
+- 如果担心风险，第一次使用前可以先备份 `~/.codex/auth.json`。
