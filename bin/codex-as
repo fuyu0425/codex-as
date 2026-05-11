@@ -346,7 +346,7 @@ run_codex_with_locked_auth_swap() {
   shift 5
 
   local target="$HOME/.codex/auth.json"
-  local home lock_dir backup had_original status child_pid hold_seconds lock_mode
+  local home lock_dir backup had_original status hold_seconds lock_mode restorer_pid
   home="$(codex_as_home)"
   lock_dir="$home/lock"
   backup=""
@@ -427,14 +427,21 @@ run_codex_with_locked_auth_swap() {
   fi
 
   set +e
-  "$codex_bin" "${config_args[@]}" "$@" &
-  child_pid=$!
-  sleep "$hold_seconds"
-  restore_auth
-  trap - EXIT INT TERM
-  wait "$child_pid"
+  (
+    sleep "$hold_seconds"
+    restore_auth
+  ) &
+  restorer_pid=$!
+  "$codex_bin" "${config_args[@]}" "$@"
   status=$?
   set -e
+
+  if kill -0 "$restorer_pid" 2>/dev/null; then
+    kill "$restorer_pid" 2>/dev/null || true
+  fi
+  wait "$restorer_pid" 2>/dev/null || true
+  restore_auth
+  trap - EXIT INT TERM
 
   return "$status"
 }
