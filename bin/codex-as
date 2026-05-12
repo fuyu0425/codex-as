@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat >&2 <<'EOF'
 usage:
-  codex-as PROFILE [--debug-auth] [codex args...]
+  codex-as PROFILE [--codex-bin PATH] [--debug-auth] [-- codex args...]
   codex-as oauth [--debug-auth] [codex args...]
   codex-as api [--debug-auth] [codex args...]
   codex-as api-key [--debug-auth] [codex args...]
@@ -298,7 +298,6 @@ run_codex_with_bwrap() {
     --bind / /
     --dev-bind /dev /dev
     --proc /proc
-    --tmpfs /tmp
     --bind "$auth_file" "$target"
     --setenv HOME "$HOME"
     --setenv USER "${USER:-$(id -un)}"
@@ -526,12 +525,32 @@ run_named_profile() {
   fi
 
   debug_auth=0
-  if [[ "${1:-}" == "--debug-auth" ]]; then
-    debug_auth=1
-    shift
-  fi
+  codex_bin=""
+  while (($#)); do
+    case "$1" in
+      --codex-bin)
+        shift
+        codex_bin="${1:-}"
+        [[ -n "$codex_bin" ]] || usage
+        shift
+        ;;
+      --debug-auth)
+        debug_auth=1
+        shift
+        ;;
+      --)
+        shift
+        break
+        ;;
+      *)
+        break
+        ;;
+    esac
+  done
 
-  codex_bin="$(resolve_codex_binary)"
+  if [[ -z "$codex_bin" ]]; then
+    codex_bin="$(resolve_codex_binary)"
+  fi
   run_codex_with_auth "$auth_file" "$model_provider" "$codex_bin" "$debug_auth" "$provider_file" "$@"
 }
 
@@ -557,12 +576,32 @@ run_saved_profile() {
   fi
 
   debug_auth=0
-  if [[ "${1:-}" == "--debug-auth" ]]; then
-    debug_auth=1
-    shift
-  fi
+  codex_bin=""
+  while (($#)); do
+    case "$1" in
+      --codex-bin)
+        shift
+        codex_bin="${1:-}"
+        [[ -n "$codex_bin" ]] || usage
+        shift
+        ;;
+      --debug-auth)
+        debug_auth=1
+        shift
+        ;;
+      --)
+        shift
+        break
+        ;;
+      *)
+        break
+        ;;
+    esac
+  done
 
-  codex_bin="$(resolve_codex_binary)"
+  if [[ -z "$codex_bin" ]]; then
+    codex_bin="$(resolve_codex_binary)"
+  fi
   run_codex_with_auth "$auth_file" "$provider" "$codex_bin" "$debug_auth" "$provider_file" "$@"
 }
 

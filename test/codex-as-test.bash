@@ -343,6 +343,69 @@ REAL_CODEX
   assert_file_contains "$tmp/shim-capture" "gpt-5.5"
 }
 
+test_codex_shim_uses_project_profile_file() {
+  local tmp="$1"
+  local shim_dir real_dir project_dir
+  shim_dir="$tmp/shim"
+  real_dir="$tmp/real"
+  project_dir="$tmp/project/subdir"
+  mkdir -p "$shim_dir" "$real_dir" "$project_dir"
+  ln -s "$SHIM" "$shim_dir/codex"
+  cat >"$shim_dir/codex-as" <<'FAKE_CODEX_AS'
+#!/usr/bin/env bash
+printf '%s\n' "$@" >"$CODEX_SHIM_CAPTURE"
+FAKE_CODEX_AS
+  chmod +x "$shim_dir/codex-as"
+  cat >"$real_dir/codex" <<'REAL_CODEX'
+#!/usr/bin/env bash
+exit 0
+REAL_CODEX
+  chmod +x "$real_dir/codex"
+  printf 'work\n' >"$tmp/project/.codex-as-profile"
+
+  (
+    cd "$project_dir"
+    CODEX_SHIM_CAPTURE="$tmp/shim-capture" PATH="$shim_dir:$real_dir:/usr/bin:/bin" "$shim_dir/codex" -m gpt-5.5
+  )
+
+  assert_file_contains "$tmp/shim-capture" "work"
+  assert_file_contains "$tmp/shim-capture" "--codex-bin"
+  assert_file_contains "$tmp/shim-capture" "$real_dir/codex"
+  assert_file_contains "$tmp/shim-capture" "--"
+  assert_file_contains "$tmp/shim-capture" "-m"
+  assert_file_contains "$tmp/shim-capture" "gpt-5.5"
+}
+
+test_codex_shim_errors_on_empty_project_profile_file() {
+  local tmp="$1"
+  local shim_dir real_dir project_dir
+  shim_dir="$tmp/shim"
+  real_dir="$tmp/real"
+  project_dir="$tmp/project"
+  mkdir -p "$shim_dir" "$real_dir" "$project_dir"
+  ln -s "$SHIM" "$shim_dir/codex"
+  cat >"$shim_dir/codex-as" <<'FAKE_CODEX_AS'
+#!/usr/bin/env bash
+exit 99
+FAKE_CODEX_AS
+  chmod +x "$shim_dir/codex-as"
+  cat >"$real_dir/codex" <<'REAL_CODEX'
+#!/usr/bin/env bash
+exit 0
+REAL_CODEX
+  chmod +x "$real_dir/codex"
+  : >"$project_dir/.codex-as-profile"
+
+  if (
+    cd "$project_dir"
+    PATH="$shim_dir:$real_dir:/usr/bin:/bin" "$shim_dir/codex" >"$tmp/out" 2>"$tmp/err"
+  ); then
+    return 1
+  fi
+
+  assert_file_contains "$tmp/err" "error: empty project profile file"
+}
+
 test_codex_shim_errors_when_codex_as_is_missing() {
   local tmp="$1"
   local shim_dir real_dir
@@ -502,6 +565,8 @@ run_case "run without selected profile has clear error" test_run_without_selecte
 run_case "direct missing profile has clear error" test_direct_missing_profile_is_clear_error
 run_case "codex shim forwards to codex-as run" test_codex_shim_calls_codex_as_with_real_codex_binary
 run_case "codex shim passes through with no selected profile" test_codex_shim_passes_through_when_no_profile_is_selected
+run_case "codex shim uses project profile file" test_codex_shim_uses_project_profile_file
+run_case "codex shim errors on empty project profile file" test_codex_shim_errors_on_empty_project_profile_file
 run_case "codex shim errors when codex-as is missing" test_codex_shim_errors_when_codex_as_is_missing
 run_case "macOS without bwrap swaps auth under lock and restores" test_macos_without_bwrap_swaps_auth_under_lock_and_restores
 run_case "macOS fallback restores before child exits by default" test_macos_fallback_restores_auth_before_child_exits_by_default

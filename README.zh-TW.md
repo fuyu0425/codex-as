@@ -102,6 +102,19 @@ api     ~/.codex/auth-api-key.json   provider custom
 `CODEX_AS_OAUTH_AUTH`、`CODEX_AS_API_AUTH`、`CODEX_AS_OAUTH_PROVIDER`、
 `CODEX_AS_API_PROVIDER` 會覆蓋上述兩種行為。
 
+## 專案內 profile
+
+安裝 `bin/codex` shim 後，可以在專案目錄寫一個 `.codex-as-profile`：
+
+```bash
+echo work > .codex-as-profile
+codex
+```
+
+`codex` wrapper 會從目前目錄向上查找 `.codex-as-profile`，讀取第一行作為
+profile 名稱，並優先使用這個專案內 profile。沒有專案內 profile 且沒有全域
+selected profile 時，wrapper 會直接轉發到真正的 Codex。
+
 ## 為什麼不是直接複製或符號連結 auth.json？
 
 許多工具透過複製、符號連結，或直接改寫 `~/.codex/auth.json` 來切換帳號。

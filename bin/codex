@@ -15,6 +15,18 @@ canonical_path() {
   fi
 }
 
+find_project_profile_file() {
+  local dir="$PWD"
+  while :; do
+    if [[ -f "$dir/.codex-as-profile" ]]; then
+      printf '%s/.codex-as-profile\n' "$dir"
+      return 0
+    fi
+    [[ "$dir" == "/" ]] && return 1
+    dir="$(dirname "$dir")"
+  done
+}
+
 self="$(canonical_path "$0")"
 
 real_codex="$(
@@ -35,6 +47,16 @@ fi
 if ! command -v codex-as >/dev/null 2>&1; then
   echo "error: codex-as not found in PATH; install codex-as next to the codex wrapper" >&2
   exit 127
+fi
+
+project_profile_file="$(find_project_profile_file || true)"
+if [[ -n "$project_profile_file" ]]; then
+  project_profile="$(sed -n '1{s/[[:space:]]*$//;p;q;}' "$project_profile_file")"
+  if [[ -z "$project_profile" ]]; then
+    echo "error: empty project profile file: $project_profile_file" >&2
+    exit 2
+  fi
+  exec codex-as "$project_profile" --codex-bin "$real_codex" -- "$@"
 fi
 
 if ! codex-as current >/dev/null 2>&1; then

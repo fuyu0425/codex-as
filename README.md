@@ -354,7 +354,17 @@ later in `PATH`, then runs:
 codex-as run --codex-bin /path/to/real/codex -- "$@"
 ```
 
-If no profile is selected, it passes through to the real Codex binary unchanged.
+If the current directory, or one of its parents, contains `.codex-as-profile`,
+the shim reads the first line and runs that saved profile:
+
+```bash
+echo work > .codex-as-profile
+codex
+```
+
+Project-local profile files take precedence over the global selected profile.
+If no project profile file exists and no global profile is selected, the shim
+passes through to the real Codex binary unchanged.
 
 ## Linux Behavior
 
@@ -365,7 +375,6 @@ bwrap \
   --bind / / \
   --dev-bind /dev /dev \
   --proc /proc \
-  --tmpfs /tmp \
   --bind "$profile_auth" "$HOME/.codex/auth.json" \
   codex ...
 ```
