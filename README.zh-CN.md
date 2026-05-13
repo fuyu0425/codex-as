@@ -122,9 +122,12 @@ api
 在这个项目目录内运行 `codex-as list` 时，会标出项目 profile 正在覆盖全局选择：
 
 ```text
-*	api	project override from /path/to/project/.codex-as-profile
--	oauth	selected, overridden by api
+* api   project override: /path/to/project/.codex-as-profile
+  oauth selected, overridden by api
 ```
+
+stdout 是终端时，当前生效的行会自动上色。设置 `NO_COLOR=1` 或
+`CODEX_AS_COLOR=never` 可关闭颜色；设置 `CODEX_AS_COLOR=always` 可强制开启。
 
 `codex` wrapper 会从当前目录向上查找 `.codex-as-profile`，读取第一条未被
 注释且非空的行作为 profile 名称，并优先使用这个项目内 profile。没有项目内

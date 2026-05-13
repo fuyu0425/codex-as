@@ -222,14 +222,15 @@ test_list_marks_selected_profile() {
   CODEX_AS_HOME="$HOME/.config/codex-as" "$SCRIPT" switch work
   CODEX_AS_HOME="$HOME/.config/codex-as" "$SCRIPT" list >"$tmp/out"
 
-  assert_file_contains "$tmp/out" $'*\twork\tselected'
+  assert_file_contains "$tmp/out" "* work  selected"
 }
 
 test_list_marks_project_profile_override() {
   local tmp="$1"
-  local project_dir expected_override
+  local project_dir project_root
   project_dir="$tmp/project/subdir"
   mkdir -p "$project_dir"
+  project_root="$(cd "$tmp/project" && pwd -P)"
   CODEX_AS_HOME="$HOME/.config/codex-as" "$SCRIPT" save oauth
   CODEX_AS_HOME="$HOME/.config/codex-as" "$SCRIPT" save api
   CODEX_AS_HOME="$HOME/.config/codex-as" "$SCRIPT" switch oauth
@@ -243,9 +244,8 @@ PROFILE
     CODEX_AS_HOME="$HOME/.config/codex-as" "$SCRIPT" list >"$tmp/out"
   )
 
-  expected_override=$'*\tapi\tproject override from '"$tmp/project/.codex-as-profile"
-  assert_file_contains "$tmp/out" "$expected_override"
-  assert_file_contains "$tmp/out" $'-\toauth\tselected, overridden by api'
+  assert_file_contains "$tmp/out" "* api   project override: $project_root/.codex-as-profile"
+  assert_file_contains "$tmp/out" "  oauth selected, overridden by api"
 }
 
 test_run_uses_selected_saved_profile_and_real_codex_binary() {

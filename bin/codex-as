@@ -206,7 +206,8 @@ canonical_path() {
 }
 
 find_project_profile_file() {
-  local dir="$PWD"
+  local dir
+  dir="$(pwd -P)"
   while :; do
     if [[ -f "$dir/.codex-as-profile" ]]; then
       printf '%s/.codex-as-profile\n' "$dir"
@@ -226,6 +227,42 @@ read_project_profile() {
     p
     q
   ' "$1"
+}
+
+use_color() {
+  case "${CODEX_AS_COLOR:-auto}" in
+    always)
+      return 0
+      ;;
+    never)
+      return 1
+      ;;
+    auto)
+      [[ -t 1 && -z "${NO_COLOR:-}" ]]
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+color_text() {
+  local color="$1"
+  local text="$2"
+  local code
+  if ! use_color; then
+    printf '%s' "$text"
+    return
+  fi
+
+  case "$color" in
+    green) code=32 ;;
+    yellow) code=33 ;;
+    red) code=31 ;;
+    dim) code=2 ;;
+    *) code=0 ;;
+  esac
+  printf '\033[%sm%s\033[0m' "$code" "$text"
 }
 
 is_codex_as_shim() {
@@ -726,7 +763,7 @@ current_profile() {
 }
 
 list_profiles() {
-  local home profiles selected project_profile_file project_profile name marker status project_seen
+  local home profiles selected project_profile_file project_profile name marker status project_seen status_color
   home="$(codex_as_home)"
   profiles="$home/profiles"
   selected=""
@@ -743,29 +780,33 @@ list_profiles() {
   project_seen=0
   while IFS= read -r dir; do
     name="$(basename "$dir")"
-    marker="-"
+    marker=" "
     status=""
+    status_color="dim"
     if [[ -n "$project_profile" && "$name" == "$project_profile" ]]; then
       marker="*"
-      status="project override from $project_profile_file"
+      status="project override: $project_profile_file"
+      status_color="green"
       project_seen=1
     elif [[ "$name" == "$selected" ]]; then
       if [[ -n "$project_profile" ]]; then
         status="selected, overridden by $project_profile"
+        status_color="yellow"
       else
         marker="*"
         status="selected"
+        status_color="green"
       fi
     fi
     if [[ -n "$status" ]]; then
-      printf '%s\t%s\t%s\n' "$marker" "$name" "$status"
+      printf '%s %-5s %s\n' "$(color_text "$status_color" "$marker")" "$name" "$(color_text "$status_color" "$status")"
     else
-      printf '%s\t%s\n' "$marker" "$name"
+      printf '%s %-5s\n' "$(color_text dim "$marker")" "$name"
     fi
   done < <(find "$profiles" -mindepth 1 -maxdepth 1 -type d | sort)
 
   if [[ -n "$project_profile" && "$project_seen" -eq 0 ]]; then
-    printf '!\t%s\tproject override from %s; profile not saved\n' "$project_profile" "$project_profile_file"
+    printf '%s %-5s %s\n' "$(color_text red "!")" "$project_profile" "$(color_text red "project override: $project_profile_file; profile not saved")"
   fi
 }
 

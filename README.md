@@ -375,9 +375,13 @@ api
 directory is inside that project:
 
 ```text
-*	api	project override from /path/to/project/.codex-as-profile
--	oauth	selected, overridden by api
+* api   project override: /path/to/project/.codex-as-profile
+  oauth selected, overridden by api
 ```
+
+When stdout is a terminal, the active line is colored automatically. Set
+`NO_COLOR=1` or `CODEX_AS_COLOR=never` to disable color, or
+`CODEX_AS_COLOR=always` to force it.
 
 Project-local profile files take precedence over the global selected profile.
 If no project profile file exists and no global profile is selected, the shim
