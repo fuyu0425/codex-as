@@ -205,6 +205,29 @@ canonical_path() {
   fi
 }
 
+find_project_profile_file() {
+  local dir="$PWD"
+  while :; do
+    if [[ -f "$dir/.codex-as-profile" ]]; then
+      printf '%s/.codex-as-profile\n' "$dir"
+      return 0
+    fi
+    [[ "$dir" == "/" ]] && return 1
+    dir="$(dirname "$dir")"
+  done
+}
+
+read_project_profile() {
+  sed -n '
+    /^[[:space:]]*#/d
+    /^[[:space:]]*$/d
+    s/^[[:space:]]*//
+    s/[[:space:]]*$//
+    p
+    q
+  ' "$1"
+}
+
 is_codex_as_shim() {
   local path="$1"
   grep -F 'codex-as run --codex-bin' "$path" >/dev/null 2>&1
@@ -703,23 +726,47 @@ current_profile() {
 }
 
 list_profiles() {
-  local home profiles selected name prefix
+  local home profiles selected project_profile_file project_profile name marker status project_seen
   home="$(codex_as_home)"
   profiles="$home/profiles"
   selected=""
   if [[ -f "$home/selected" ]]; then
     selected="$(sed -n '1p' "$home/selected")"
   fi
+  project_profile_file="$(find_project_profile_file || true)"
+  project_profile=""
+  if [[ -n "$project_profile_file" ]]; then
+    project_profile="$(read_project_profile "$project_profile_file")"
+  fi
 
   [[ -d "$profiles" ]] || return 0
+  project_seen=0
   while IFS= read -r dir; do
     name="$(basename "$dir")"
-    prefix=" "
-    if [[ "$name" == "$selected" ]]; then
-      prefix="*"
+    marker="-"
+    status=""
+    if [[ -n "$project_profile" && "$name" == "$project_profile" ]]; then
+      marker="*"
+      status="project override from $project_profile_file"
+      project_seen=1
+    elif [[ "$name" == "$selected" ]]; then
+      if [[ -n "$project_profile" ]]; then
+        status="selected, overridden by $project_profile"
+      else
+        marker="*"
+        status="selected"
+      fi
     fi
-    printf '%s %s\n' "$prefix" "$name"
+    if [[ -n "$status" ]]; then
+      printf '%s\t%s\t%s\n' "$marker" "$name" "$status"
+    else
+      printf '%s\t%s\n' "$marker" "$name"
+    fi
   done < <(find "$profiles" -mindepth 1 -maxdepth 1 -type d | sort)
+
+  if [[ -n "$project_profile" && "$project_seen" -eq 0 ]]; then
+    printf '!\t%s\tproject override from %s; profile not saved\n' "$project_profile" "$project_profile_file"
+  fi
 }
 
 completion_source() {

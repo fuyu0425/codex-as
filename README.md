@@ -371,6 +371,14 @@ api
 # work
 ```
 
+`codex-as list` marks the project profile as an override when the current
+directory is inside that project:
+
+```text
+*	api	project override from /path/to/project/.codex-as-profile
+-	oauth	selected, overridden by api
+```
+
 Project-local profile files take precedence over the global selected profile.
 If no project profile file exists and no global profile is selected, the shim
 passes through to the real Codex binary unchanged.

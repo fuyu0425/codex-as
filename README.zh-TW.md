@@ -119,6 +119,13 @@ api
 # work
 ```
 
+在這個專案目錄內執行 `codex-as list` 時，會標出專案 profile 正在覆蓋全域選擇：
+
+```text
+*	api	project override from /path/to/project/.codex-as-profile
+-	oauth	selected, overridden by api
+```
+
 `codex` wrapper 會從目前目錄向上查找 `.codex-as-profile`，讀取第一條未被
 註解且非空的行作為 profile 名稱，並優先使用這個專案內 profile。沒有專案內
 profile 且沒有全域 selected profile 時，wrapper 會直接轉發到真正的 Codex。

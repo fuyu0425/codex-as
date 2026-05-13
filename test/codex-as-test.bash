@@ -222,7 +222,30 @@ test_list_marks_selected_profile() {
   CODEX_AS_HOME="$HOME/.config/codex-as" "$SCRIPT" switch work
   CODEX_AS_HOME="$HOME/.config/codex-as" "$SCRIPT" list >"$tmp/out"
 
-  assert_file_contains "$tmp/out" "* work"
+  assert_file_contains "$tmp/out" $'*\twork\tselected'
+}
+
+test_list_marks_project_profile_override() {
+  local tmp="$1"
+  local project_dir expected_override
+  project_dir="$tmp/project/subdir"
+  mkdir -p "$project_dir"
+  CODEX_AS_HOME="$HOME/.config/codex-as" "$SCRIPT" save oauth
+  CODEX_AS_HOME="$HOME/.config/codex-as" "$SCRIPT" save api
+  CODEX_AS_HOME="$HOME/.config/codex-as" "$SCRIPT" switch oauth
+  cat >"$tmp/project/.codex-as-profile" <<'PROFILE'
+# oauth
+api
+PROFILE
+
+  (
+    cd "$project_dir"
+    CODEX_AS_HOME="$HOME/.config/codex-as" "$SCRIPT" list >"$tmp/out"
+  )
+
+  expected_override=$'*\tapi\tproject override from '"$tmp/project/.codex-as-profile"
+  assert_file_contains "$tmp/out" "$expected_override"
+  assert_file_contains "$tmp/out" $'-\toauth\tselected, overridden by api'
 }
 
 test_run_uses_selected_saved_profile_and_real_codex_binary() {
@@ -594,6 +617,7 @@ run_case "save copies current auth and provider" test_save_current_profile_copie
 run_case "save accepts provider override" test_save_current_profile_accepts_provider_override
 run_case "switch selects profile and current prints it" test_switch_selects_existing_profile_and_current_prints_it
 run_case "list marks selected profile" test_list_marks_selected_profile
+run_case "list marks project profile override" test_list_marks_project_profile_override
 run_case "run uses selected saved profile" test_run_uses_selected_saved_profile_and_real_codex_binary
 run_case "direct saved profile name runs profile" test_direct_saved_profile_name_runs_profile
 run_case "run preserves legacy profile without provider snapshot" test_run_preserves_legacy_profile_without_provider_snapshot
