@@ -355,11 +355,20 @@ codex-as run --codex-bin /path/to/real/codex -- "$@"
 ```
 
 If the current directory, or one of its parents, contains `.codex-as-profile`,
-the shim reads the first line and runs that saved profile:
+the shim reads the first uncommented, non-empty line and runs that saved
+profile:
 
 ```bash
 echo work > .codex-as-profile
 codex
+```
+
+You can keep alternatives in the file and switch by moving the `#`:
+
+```text
+# oauth
+api
+# work
 ```
 
 Project-local profile files take precedence over the global selected profile.

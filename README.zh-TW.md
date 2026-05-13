@@ -111,9 +111,17 @@ echo work > .codex-as-profile
 codex
 ```
 
-`codex` wrapper 會從目前目錄向上查找 `.codex-as-profile`，讀取第一行作為
-profile 名稱，並優先使用這個專案內 profile。沒有專案內 profile 且沒有全域
-selected profile 時，wrapper 會直接轉發到真正的 Codex。
+也可以把多個選擇留在檔案裡，透過移動 `#` 來切換：
+
+```text
+# oauth
+api
+# work
+```
+
+`codex` wrapper 會從目前目錄向上查找 `.codex-as-profile`，讀取第一條未被
+註解且非空的行作為 profile 名稱，並優先使用這個專案內 profile。沒有專案內
+profile 且沒有全域 selected profile 時，wrapper 會直接轉發到真正的 Codex。
 
 ## 為什麼不是直接複製或符號連結 auth.json？
 
