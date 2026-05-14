@@ -216,6 +216,26 @@ test_switch_selects_existing_profile_and_current_prints_it() {
   [[ "$(cat "$tmp/out")" == "work" ]] || return 1
 }
 
+test_delete_removes_profile_and_clears_selection() {
+  local tmp="$1"
+  CODEX_AS_HOME="$HOME/.config/codex-as" "$SCRIPT" save work
+  CODEX_AS_HOME="$HOME/.config/codex-as" "$SCRIPT" switch work
+  CODEX_AS_HOME="$HOME/.config/codex-as" "$SCRIPT" delete work >"$tmp/out"
+
+  assert_file_contains "$tmp/out" "deleted profile: work"
+  [[ ! -e "$HOME/.config/codex-as/profiles/work" ]] || return 1
+  [[ ! -e "$HOME/.config/codex-as/selected" ]] || return 1
+}
+
+test_delete_missing_profile_is_clear_error() {
+  local tmp="$1"
+  if CODEX_AS_HOME="$HOME/.config/codex-as" "$SCRIPT" delete missing >"$tmp/out" 2>"$tmp/err"; then
+    return 1
+  fi
+
+  assert_file_contains "$tmp/err" "error: profile does not exist: missing"
+}
+
 test_list_marks_selected_profile() {
   local tmp="$1"
   CODEX_AS_HOME="$HOME/.config/codex-as" "$SCRIPT" save work
@@ -616,6 +636,8 @@ run_case "world-readable auth warns but runs" test_world_readable_auth_warns_but
 run_case "save copies current auth and provider" test_save_current_profile_copies_auth_and_provider
 run_case "save accepts provider override" test_save_current_profile_accepts_provider_override
 run_case "switch selects profile and current prints it" test_switch_selects_existing_profile_and_current_prints_it
+run_case "delete removes profile and clears selection" test_delete_removes_profile_and_clears_selection
+run_case "delete missing profile has clear error" test_delete_missing_profile_is_clear_error
 run_case "list marks selected profile" test_list_marks_selected_profile
 run_case "list marks project profile override" test_list_marks_project_profile_override
 run_case "run uses selected saved profile" test_run_uses_selected_saved_profile_and_real_codex_binary

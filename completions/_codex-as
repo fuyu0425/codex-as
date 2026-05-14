@@ -2,7 +2,7 @@
 
 _codex_as_profiles() {
   local -a profiles
-  profiles=(${(f)"$(codex-as list 2>/dev/null | sed -E 's/^[* ] //' )"})
+  profiles=(${(f)"$(codex-as list 2>/dev/null | awk '{ print $2 }')"})
   if (( ${#profiles[@]} )); then
     _describe -t profiles 'codex-as profile' profiles
   else
@@ -18,6 +18,7 @@ _codex_as() {
     'api-key:Alias for api'
     'save:Save current ~/.codex/auth.json as a named profile'
     'switch:Select a saved profile'
+    'delete:Delete a saved profile'
     'current:Print selected profile'
     'list:List saved profiles'
     'run:Run Codex with selected profile'
@@ -42,7 +43,7 @@ _codex_as() {
         _describe -t options 'save option' save_opts
       fi
       ;;
-    switch)
+    switch|delete)
       _codex_as_profiles
       ;;
     run)

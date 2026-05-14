@@ -10,6 +10,7 @@ usage:
   codex-as api-key [--debug-auth] [codex args...]
   codex-as save NAME [--provider PROVIDER]
   codex-as switch NAME
+  codex-as delete NAME
   codex-as current
   codex-as list
   codex-as run [--codex-bin PATH] [--debug-auth] [-- codex args...]
@@ -73,7 +74,7 @@ validate_name() {
 }
 
 known_commands() {
-  printf '%s\n' oauth api api-key save switch current list run completions install-completions
+  printf '%s\n' oauth api api-key save switch delete current list run completions install-completions
 }
 
 is_adjacent_transposition() {
@@ -752,6 +753,36 @@ switch_profile() {
   printf 'selected profile: %s\n' "$name"
 }
 
+delete_profile() {
+  local name="${1:-}"
+  [[ -n "$name" ]] || usage
+  validate_name "$name"
+  shift || true
+  (($# == 0)) || usage
+
+  local home dir selected tmp
+  home="$(codex_as_home)"
+  dir="$(profile_dir "$name")"
+  selected="$home/selected"
+
+  if [[ ! -d "$dir" ]]; then
+    echo "error: profile does not exist: $name" >&2
+    exit 1
+  fi
+
+  rm -rf "$dir"
+
+  if [[ -f "$selected" && "$(sed -n '1p' "$selected")" == "$name" ]]; then
+    tmp="$home/selected.$$"
+    rm -f "$tmp"
+    rm -f "$selected"
+    printf 'deleted profile: %s\n' "$name"
+    printf 'cleared selected profile\n'
+  else
+    printf 'deleted profile: %s\n' "$name"
+  fi
+}
+
 current_profile() {
   local selected
   selected="$(codex_as_home)/selected"
@@ -932,6 +963,9 @@ case "$command_name" in
     ;;
   switch)
     switch_profile "$@"
+    ;;
+  delete)
+    delete_profile "$@"
     ;;
   current)
     (($# == 0)) || usage

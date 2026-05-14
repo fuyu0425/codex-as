@@ -264,6 +264,12 @@ codex-as list
 codex-as current
 ```
 
+Delete a saved profile:
+
+```bash
+codex-as delete old-profile
+```
+
 Switch back:
 
 ```bash
@@ -463,6 +469,7 @@ and serializes only startup by default.
 codex-as PROFILE [--debug-auth] [codex args...]
 codex-as save NAME [--provider PROVIDER]
 codex-as switch NAME
+codex-as delete NAME
 codex-as current
 codex-as list
 codex-as run [--codex-bin PATH] [--debug-auth] [-- codex args...]

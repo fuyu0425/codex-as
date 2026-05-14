@@ -73,6 +73,12 @@ codex-as list
 codex-as current
 ```
 
+删除保存的 profile：
+
+```bash
+codex-as delete old-profile
+```
+
 也可以直接运行任意保存的 profile：
 
 ```bash
