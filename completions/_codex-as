@@ -20,6 +20,7 @@ _codex_as() {
     'switch:Select a saved profile'
     'delete:Delete a saved profile'
     'init:Write .codex-as-profile template in current directory'
+    'set:Set active profile in .codex-as-profile'
     'current:Print selected profile'
     'list:List saved profiles'
     'run:Run Codex with selected profile'
@@ -44,7 +45,7 @@ _codex_as() {
         _describe -t options 'save option' save_opts
       fi
       ;;
-    switch|delete)
+    switch|delete|set)
       _codex_as_profiles
       ;;
     run)

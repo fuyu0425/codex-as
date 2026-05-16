@@ -274,6 +274,45 @@ test_set_alias_writes_project_profile_template() {
   assert_file_contains "$project_dir/.codex-as-profile" "# oauth"
 }
 
+test_set_profile_selects_project_profile_template_entry() {
+  local tmp="$1"
+  local project_dir
+  project_dir="$tmp/project"
+  mkdir -p "$project_dir"
+  CODEX_AS_HOME="$HOME/.config/codex-as" "$SCRIPT" save oauth
+  CODEX_AS_HOME="$HOME/.config/codex-as" "$SCRIPT" save api
+
+  (
+    cd "$project_dir"
+    CODEX_AS_HOME="$HOME/.config/codex-as" "$SCRIPT" set api >"$tmp/out"
+  )
+
+  assert_file_contains "$tmp/out" "set project profile: api"
+  assert_file_contains "$project_dir/.codex-as-profile" '# -*- comment-start: "# " -*-'
+  assert_file_contains "$project_dir/.codex-as-profile" "api"
+  assert_file_contains "$project_dir/.codex-as-profile" "# oauth"
+  if grep -Fx -- "# api" "$project_dir/.codex-as-profile" >/dev/null; then
+    return 1
+  fi
+}
+
+test_set_profile_appends_unknown_project_profile() {
+  local tmp="$1"
+  local project_dir
+  project_dir="$tmp/project"
+  mkdir -p "$project_dir"
+  CODEX_AS_HOME="$HOME/.config/codex-as" "$SCRIPT" save oauth
+
+  (
+    cd "$project_dir"
+    CODEX_AS_HOME="$HOME/.config/codex-as" "$SCRIPT" set work >"$tmp/out"
+  )
+
+  assert_file_contains "$tmp/out" "set project profile: work"
+  assert_file_contains "$project_dir/.codex-as-profile" "# oauth"
+  assert_file_contains "$project_dir/.codex-as-profile" "work"
+}
+
 test_list_marks_selected_profile() {
   local tmp="$1"
   CODEX_AS_HOME="$HOME/.config/codex-as" "$SCRIPT" save work
@@ -678,6 +717,8 @@ run_case "delete removes profile and clears selection" test_delete_removes_profi
 run_case "delete missing profile has clear error" test_delete_missing_profile_is_clear_error
 run_case "init writes project profile template" test_init_writes_project_profile_template
 run_case "set alias writes project profile template" test_set_alias_writes_project_profile_template
+run_case "set profile selects project profile template entry" test_set_profile_selects_project_profile_template_entry
+run_case "set profile appends unknown project profile" test_set_profile_appends_unknown_project_profile
 run_case "list marks selected profile" test_list_marks_selected_profile
 run_case "list marks project profile override" test_list_marks_project_profile_override
 run_case "run uses selected saved profile" test_run_uses_selected_saved_profile_and_real_codex_binary

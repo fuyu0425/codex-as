@@ -12,6 +12,7 @@ usage:
   codex-as switch NAME
   codex-as delete NAME
   codex-as init
+  codex-as set PROFILE
   codex-as current
   codex-as list
   codex-as run [--codex-bin PATH] [--debug-auth] [-- codex args...]
@@ -784,10 +785,15 @@ delete_profile() {
   fi
 }
 
-set_project_profile_template() {
+write_project_profile_template() {
+  local active_profile="${1:-}"
+  if [[ -n "$active_profile" ]]; then
+    validate_name "$active_profile"
+    shift
+  fi
   (($# == 0)) || usage
 
-  local home profiles target tmp dir name
+  local home profiles target tmp dir name active_seen=0
   home="$(codex_as_home)"
   profiles="$home/profiles"
   target="$(pwd -P)/.codex-as-profile"
@@ -798,11 +804,22 @@ set_project_profile_template() {
     if [[ -d "$profiles" ]]; then
       while IFS= read -r dir; do
         name="$(basename "$dir")"
-        printf '# %s\n' "$name"
+        if [[ -n "$active_profile" && "$name" == "$active_profile" ]]; then
+          printf '%s\n' "$name"
+          active_seen=1
+        else
+          printf '# %s\n' "$name"
+        fi
       done < <(find "$profiles" -mindepth 1 -maxdepth 1 -type d | sort)
+    fi
+    if [[ -n "$active_profile" && "$active_seen" -eq 0 ]]; then
+      printf '%s\n' "$active_profile"
     fi
   } >"$tmp"
   mv "$tmp" "$target"
+  if [[ -n "$active_profile" ]]; then
+    printf 'set project profile: %s\n' "$active_profile"
+  fi
   printf 'wrote project profile template: %s\n' "$target"
 }
 
@@ -991,7 +1008,7 @@ case "$command_name" in
     delete_profile "$@"
     ;;
   init|set)
-    set_project_profile_template "$@"
+    write_project_profile_template "$@"
     ;;
   current)
     (($# == 0)) || usage

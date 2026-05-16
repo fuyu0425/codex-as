@@ -274,6 +274,7 @@ Create a project-local profile template:
 
 ```bash
 codex-as init
+codex-as set api
 ```
 
 Switch back:
@@ -385,8 +386,9 @@ api
 ```
 
 `codex-as init` writes this file in the current directory with every saved
-profile commented out, so you can uncomment one line when a project needs a
-specific profile.
+profile commented out. `codex-as set PROFILE` rewrites it with that profile
+uncommented and all others commented. If `PROFILE` is not in the saved list, it
+is appended at the end.
 
 `codex-as list` marks the project profile as an override when the current
 directory is inside that project:
@@ -482,6 +484,7 @@ codex-as save NAME [--provider PROVIDER]
 codex-as switch NAME
 codex-as delete NAME
 codex-as init
+codex-as set PROFILE
 codex-as current
 codex-as list
 codex-as run [--codex-bin PATH] [--debug-auth] [-- codex args...]

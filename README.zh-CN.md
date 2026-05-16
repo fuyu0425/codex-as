@@ -83,6 +83,7 @@ codex-as delete old-profile
 
 ```bash
 codex-as init
+codex-as set api
 ```
 
 也可以直接运行任意保存的 profile：
@@ -133,7 +134,8 @@ api
 ```
 
 `codex-as init` 会在当前目录写入这个文件，并把所有已保存 profile 都注释掉。
-项目需要固定 profile 时，取消注释其中一行即可。
+`codex-as set PROFILE` 会重写这个文件，取消注释指定 profile，并注释掉其他行。
+如果 `PROFILE` 不在已保存列表里，会追加到文件末尾。
 
 在这个项目目录内运行 `codex-as list` 时，会标出项目 profile 正在覆盖全局选择：
 
