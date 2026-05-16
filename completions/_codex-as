@@ -19,7 +19,7 @@ _codex_as() {
     'save:Save current ~/.codex/auth.json as a named profile'
     'switch:Select a saved profile'
     'delete:Delete a saved profile'
-    'set:Write .codex-as-profile template in current directory'
+    'init:Write .codex-as-profile template in current directory'
     'current:Print selected profile'
     'list:List saved profiles'
     'run:Run Codex with selected profile'

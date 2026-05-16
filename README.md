@@ -273,7 +273,7 @@ codex-as delete old-profile
 Create a project-local profile template:
 
 ```bash
-codex-as set
+codex-as init
 ```
 
 Switch back:
@@ -384,7 +384,7 @@ api
 # work
 ```
 
-`codex-as set` writes this file in the current directory with every saved
+`codex-as init` writes this file in the current directory with every saved
 profile commented out, so you can uncomment one line when a project needs a
 specific profile.
 
@@ -481,7 +481,7 @@ codex-as PROFILE [--debug-auth] [codex args...]
 codex-as save NAME [--provider PROVIDER]
 codex-as switch NAME
 codex-as delete NAME
-codex-as set
+codex-as init
 codex-as current
 codex-as list
 codex-as run [--codex-bin PATH] [--debug-auth] [-- codex args...]

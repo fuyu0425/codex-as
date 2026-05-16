@@ -11,7 +11,7 @@ usage:
   codex-as save NAME [--provider PROVIDER]
   codex-as switch NAME
   codex-as delete NAME
-  codex-as set
+  codex-as init
   codex-as current
   codex-as list
   codex-as run [--codex-bin PATH] [--debug-auth] [-- codex args...]
@@ -75,7 +75,7 @@ validate_name() {
 }
 
 known_commands() {
-  printf '%s\n' oauth api api-key save switch delete set current list run completions install-completions
+  printf '%s\n' oauth api api-key save switch delete init set current list run completions install-completions
 }
 
 is_adjacent_transposition() {
@@ -990,7 +990,7 @@ case "$command_name" in
   delete)
     delete_profile "$@"
     ;;
-  set)
+  init|set)
     set_project_profile_template "$@"
     ;;
   current)
