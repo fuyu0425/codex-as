@@ -270,6 +270,12 @@ Delete a saved profile:
 codex-as delete old-profile
 ```
 
+Create a project-local profile template:
+
+```bash
+codex-as set
+```
+
 Switch back:
 
 ```bash
@@ -372,10 +378,15 @@ codex
 You can keep alternatives in the file and switch by moving the `#`:
 
 ```text
+# -*- comment-start: "# " -*-
 # oauth
 api
 # work
 ```
+
+`codex-as set` writes this file in the current directory with every saved
+profile commented out, so you can uncomment one line when a project needs a
+specific profile.
 
 `codex-as list` marks the project profile as an override when the current
 directory is inside that project:
@@ -470,6 +481,7 @@ codex-as PROFILE [--debug-auth] [codex args...]
 codex-as save NAME [--provider PROVIDER]
 codex-as switch NAME
 codex-as delete NAME
+codex-as set
 codex-as current
 codex-as list
 codex-as run [--codex-bin PATH] [--debug-auth] [-- codex args...]

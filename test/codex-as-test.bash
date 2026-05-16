@@ -236,6 +236,29 @@ test_delete_missing_profile_is_clear_error() {
   assert_file_contains "$tmp/err" "error: profile does not exist: missing"
 }
 
+test_set_writes_project_profile_template() {
+  local tmp="$1"
+  local project_dir project_root
+  project_dir="$tmp/project"
+  mkdir -p "$project_dir"
+  project_root="$(cd "$project_dir" && pwd -P)"
+  CODEX_AS_HOME="$HOME/.config/codex-as" "$SCRIPT" save oauth
+  CODEX_AS_HOME="$HOME/.config/codex-as" "$SCRIPT" save api
+
+  (
+    cd "$project_dir"
+    CODEX_AS_HOME="$HOME/.config/codex-as" "$SCRIPT" set >"$tmp/out"
+  )
+
+  assert_file_contains "$tmp/out" "wrote project profile template: $project_root/.codex-as-profile"
+  assert_file_contains "$project_dir/.codex-as-profile" '# -*- comment-start: "# " -*-'
+  assert_file_contains "$project_dir/.codex-as-profile" "# api"
+  assert_file_contains "$project_dir/.codex-as-profile" "# oauth"
+  if grep -Ev '^(#|$)' "$project_dir/.codex-as-profile" >/dev/null; then
+    return 1
+  fi
+}
+
 test_list_marks_selected_profile() {
   local tmp="$1"
   CODEX_AS_HOME="$HOME/.config/codex-as" "$SCRIPT" save work
@@ -638,6 +661,7 @@ run_case "save accepts provider override" test_save_current_profile_accepts_prov
 run_case "switch selects profile and current prints it" test_switch_selects_existing_profile_and_current_prints_it
 run_case "delete removes profile and clears selection" test_delete_removes_profile_and_clears_selection
 run_case "delete missing profile has clear error" test_delete_missing_profile_is_clear_error
+run_case "set writes project profile template" test_set_writes_project_profile_template
 run_case "list marks selected profile" test_list_marks_selected_profile
 run_case "list marks project profile override" test_list_marks_project_profile_override
 run_case "run uses selected saved profile" test_run_uses_selected_saved_profile_and_real_codex_binary

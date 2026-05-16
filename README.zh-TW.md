@@ -79,6 +79,12 @@ codex-as current
 codex-as delete old-profile
 ```
 
+建立專案內 profile 模板：
+
+```bash
+codex-as set
+```
+
 也可以直接執行任意保存的 profile：
 
 ```bash
@@ -120,10 +126,14 @@ codex
 也可以把多個選擇留在檔案裡，透過移動 `#` 來切換：
 
 ```text
+# -*- comment-start: "# " -*-
 # oauth
 api
 # work
 ```
+
+`codex-as set` 會在目前目錄寫入這個檔案，並把所有已保存 profile 都註解掉。
+專案需要固定 profile 時，取消註解其中一行即可。
 
 在這個專案目錄內執行 `codex-as list` 時，會標出專案 profile 正在覆蓋全域選擇：
 

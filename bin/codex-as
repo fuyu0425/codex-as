@@ -11,6 +11,7 @@ usage:
   codex-as save NAME [--provider PROVIDER]
   codex-as switch NAME
   codex-as delete NAME
+  codex-as set
   codex-as current
   codex-as list
   codex-as run [--codex-bin PATH] [--debug-auth] [-- codex args...]
@@ -74,7 +75,7 @@ validate_name() {
 }
 
 known_commands() {
-  printf '%s\n' oauth api api-key save switch delete current list run completions install-completions
+  printf '%s\n' oauth api api-key save switch delete set current list run completions install-completions
 }
 
 is_adjacent_transposition() {
@@ -783,6 +784,28 @@ delete_profile() {
   fi
 }
 
+set_project_profile_template() {
+  (($# == 0)) || usage
+
+  local home profiles target tmp dir name
+  home="$(codex_as_home)"
+  profiles="$home/profiles"
+  target="$(pwd -P)/.codex-as-profile"
+  tmp="$target.$$"
+
+  {
+    printf '# -*- comment-start: "# " -*-\n'
+    if [[ -d "$profiles" ]]; then
+      while IFS= read -r dir; do
+        name="$(basename "$dir")"
+        printf '# %s\n' "$name"
+      done < <(find "$profiles" -mindepth 1 -maxdepth 1 -type d | sort)
+    fi
+  } >"$tmp"
+  mv "$tmp" "$target"
+  printf 'wrote project profile template: %s\n' "$target"
+}
+
 current_profile() {
   local selected
   selected="$(codex_as_home)/selected"
@@ -966,6 +989,9 @@ case "$command_name" in
     ;;
   delete)
     delete_profile "$@"
+    ;;
+  set)
+    set_project_profile_template "$@"
     ;;
   current)
     (($# == 0)) || usage
