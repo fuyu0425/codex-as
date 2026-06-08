@@ -298,6 +298,10 @@ Default storage:
     oauth/
       auth.json
       profile.toml
+    moonbridge/
+      auth.json
+      profile.toml
+      models_catalog.json      (optional)
 ```
 
 Override the storage root with:
@@ -308,11 +312,23 @@ CODEX_AS_HOME=/path/to/state codex-as list
 
 `auth.json` is a copy of the saved Codex auth file.
 
-`profile.toml` stores the provider selected for that saved profile:
+`profile.toml` stores the provider and any top-level Codex config overrides for that profile:
 
 ```toml
-model_provider = "openai"
+model_provider = "moonbridge"
+model = "deepseek-v4-pro"
+model_reasoning_effort = "high"
 ```
+
+Every key except `model_provider` is forwarded to Codex as `-c KEY=VALUE` at launch time. A minimal profile with only `model_provider` works the same as before.
+
+If a `models_catalog.json` file is present in the profile directory, it is automatically passed as:
+
+```bash
+-c model_catalog_json=/path/to/profile/models_catalog.json
+```
+
+This is useful with providers like [moon-bridge](https://github.com/ZhiYi-R/moon-bridge) that generate a model catalog JSON file to advertise available models to Codex.
 
 For custom providers, `codex-as save` snapshots the provider definition from
 `~/.codex/config.toml` into `provider.toml`, then renames it to a stable
@@ -344,8 +360,7 @@ codex -c 'model_provider="custom"'
 codex -c 'model_providers.custom.base_url="https://api.example.com/v1"'
 ```
 
-`codex-as` uses that mechanism to replay saved providers. A saved `api` profile
-with provider `codex-as-api` launches Codex roughly like:
+`codex-as` uses that mechanism to replay saved providers and profile settings. A saved `api` profile with provider `codex-as-api` launches Codex roughly like:
 
 ```bash
 codex \
@@ -356,7 +371,26 @@ codex \
   -c 'model_provider="codex-as-api"'
 ```
 
-The exact auth-file substitution depends on the platform.
+A profile with extra top-level keys in `profile.toml` appends those as additional `-c` flags:
+
+```toml
+# profile.toml
+model_provider = "moonbridge"
+model = "deepseek-v4-pro"
+model_reasoning_effort = "high"
+```
+
+Launches as:
+
+```bash
+codex \
+  -c 'model_provider="moonbridge"' \
+  -c 'model_catalog_json="/path/to/profiles/moonbridge/models_catalog.json"' \
+  -c 'model="deepseek-v4-pro"' \
+  -c 'model_reasoning_effort="high"'
+```
+
+The `models_catalog.json` line is only added when that file exists in the profile directory. The exact auth-file substitution depends on the platform.
 
 ## Transparent `codex` Shim
 
