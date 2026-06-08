@@ -330,7 +330,8 @@ run_codex_with_bwrap() {
   local codex_bin="$3"
   local debug_auth="$4"
   local provider_file="$5"
-  shift 5
+  local profile_file="${6:-}"
+  shift 6
 
   local target="$HOME/.codex/auth.json"
 
@@ -379,7 +380,7 @@ run_codex_with_bwrap() {
   fi
 
   local config_args=()
-  add_config_args "$model_provider" "$provider_file"
+  add_config_args "$model_provider" "$provider_file" "$profile_file"
   exec bwrap "${bwrap_args[@]}" "$codex_bin" "${config_args[@]}" "$@"
 }
 
@@ -405,7 +406,8 @@ run_codex_with_locked_auth_swap() {
   local codex_bin="$3"
   local debug_auth="$4"
   local provider_file="$5"
-  shift 5
+  local profile_file="${6:-}"
+  shift 6
 
   local target="$HOME/.codex/auth.json"
   local home lock_dir backup had_original status hold_seconds lock_mode restorer_pid
@@ -475,7 +477,7 @@ run_codex_with_locked_auth_swap() {
   fi
 
   local config_args=()
-  add_config_args "$model_provider" "$provider_file"
+  add_config_args "$model_provider" "$provider_file" "$profile_file"
 
   if [[ "$lock_mode" == "session" ]]; then
     set +e
@@ -514,12 +516,13 @@ run_codex_with_auth() {
   local codex_bin="$3"
   local debug_auth="$4"
   local provider_file="$5"
-  shift 5
+  local profile_file="${6:-}"
+  shift 6
 
   if has_bwrap; then
-    run_codex_with_bwrap "$auth_file" "$model_provider" "$codex_bin" "$debug_auth" "$provider_file" "$@"
+    run_codex_with_bwrap "$auth_file" "$model_provider" "$codex_bin" "$debug_auth" "$provider_file" "$profile_file" "$@"
   elif [[ "$(uname -s)" == "Darwin" ]]; then
-    run_codex_with_locked_auth_swap "$auth_file" "$model_provider" "$codex_bin" "$debug_auth" "$provider_file" "$@"
+    run_codex_with_locked_auth_swap "$auth_file" "$model_provider" "$codex_bin" "$debug_auth" "$provider_file" "$profile_file" "$@"
   else
     check_bwrap
   fi
@@ -528,6 +531,7 @@ run_codex_with_auth() {
 add_config_args() {
   local model_provider="$1"
   local provider_file="$2"
+  local profile_file="${3:-}"
   local line key value
 
   if [[ -n "$provider_file" && -f "$provider_file" ]]; then
@@ -540,6 +544,21 @@ add_config_args() {
   fi
 
   config_args+=( -c "model_provider=$(toml_string "$model_provider")" )
+
+  if [[ -n "$profile_file" && -f "$profile_file" ]]; then
+    local profile_dir
+    profile_dir="$(dirname "$profile_file")"
+    if [[ -f "$profile_dir/models_catalog.json" ]]; then
+      config_args+=( -c "model_catalog_json=$profile_dir/models_catalog.json" )
+    fi
+    while IFS= read -r line; do
+      [[ "$line" =~ ^[[:space:]]*([A-Za-z0-9_-]+)[[:space:]]*=[[:space:]]*(.+)$ ]] || continue
+      key="${BASH_REMATCH[1]}"
+      [[ "$key" == "model_provider" ]] && continue
+      value="${BASH_REMATCH[2]}"
+      config_args+=( -c "$key=$value" )
+    done <"$profile_file"
+  fi
 }
 
 run_named_profile() {
@@ -564,6 +583,7 @@ run_named_profile() {
   esac
 
   provider_file=""
+  profile_file=""
   saved_dir="$(profile_dir "$profile_key")"
   if [[ "$profile_key" == "oauth" && -z "${CODEX_AS_OAUTH_AUTH:-}" && -f "$saved_dir/auth.json" ]]; then
     auth_file="$saved_dir/auth.json"
@@ -571,6 +591,7 @@ run_named_profile() {
       model_provider="$(extract_model_provider "$saved_dir/profile.toml")"
       if [[ -n "$model_provider" ]]; then
         provider_file="$saved_dir/provider.toml"
+        profile_file="$saved_dir/profile.toml"
       else
         model_provider="openai"
       fi
@@ -581,6 +602,7 @@ run_named_profile() {
       model_provider="$(extract_model_provider "$saved_dir/profile.toml")"
       if [[ -n "$model_provider" ]]; then
         provider_file="$saved_dir/provider.toml"
+        profile_file="$saved_dir/profile.toml"
       else
         model_provider="custom"
       fi
@@ -614,7 +636,7 @@ run_named_profile() {
   if [[ -z "$codex_bin" ]]; then
     codex_bin="$(resolve_codex_binary)"
   fi
-  run_codex_with_auth "$auth_file" "$model_provider" "$codex_bin" "$debug_auth" "$provider_file" "$@"
+  run_codex_with_auth "$auth_file" "$model_provider" "$codex_bin" "$debug_auth" "$provider_file" "$profile_file" "$@"
 }
 
 run_saved_profile() {
@@ -665,7 +687,7 @@ run_saved_profile() {
   if [[ -z "$codex_bin" ]]; then
     codex_bin="$(resolve_codex_binary)"
   fi
-  run_codex_with_auth "$auth_file" "$provider" "$codex_bin" "$debug_auth" "$provider_file" "$@"
+  run_codex_with_auth "$auth_file" "$provider" "$codex_bin" "$debug_auth" "$provider_file" "$dir/profile.toml" "$@"
 }
 
 save_profile() {
@@ -987,7 +1009,7 @@ run_selected_profile() {
     exit 1
   fi
 
-  run_codex_with_auth "$auth_file" "$provider" "$codex_bin" "$debug_auth" "$provider_file" "$@"
+  run_codex_with_auth "$auth_file" "$provider" "$codex_bin" "$debug_auth" "$provider_file" "$dir/profile.toml" "$@"
 }
 
 command_name="${1:-}"
