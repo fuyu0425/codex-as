@@ -232,3 +232,7 @@ rehash
 - Linux 上的 bubblewrap 只用於單一行程的 auth 檔案替換。
 - macOS 上，`codex-as` 會在 Codex 啟動期間暫時替換 `auth.json`，之後恢復。
 - 如果擔心風險，第一次使用前可以先備份 `~/.codex/auth.json`。
+
+## 授權
+
+MIT
