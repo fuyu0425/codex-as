@@ -652,4 +652,4 @@ shell is force-killed during that window, inspect:
 
 ## License
 
-Choose a license before publishing this repository.
+MIT
